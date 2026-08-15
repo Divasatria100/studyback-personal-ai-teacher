@@ -32,6 +32,12 @@ class MaterialController extends Controller
 
         $filePath = $file->store('materials', 'local');
 
+        if ($filePath === false) {
+            return new JsonResponse([
+                'message' => 'The uploaded file could not be stored. Please try again.',
+            ], 500);
+        }
+
         $material = $this->materials->create([
             'user_id' => $request->user()->id,
             'title' => $request->input('title') ?? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME),

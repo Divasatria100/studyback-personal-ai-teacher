@@ -14,7 +14,7 @@ class StoreMaterialRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file' => ['required', 'file', 'mimes:pdf', 'max:'.self::MAX_FILE_SIZE],
+            'file' => ['required', 'file', 'mimes:pdf', 'min:1', 'max:'.self::MAX_FILE_SIZE],
             'title' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
         ];
