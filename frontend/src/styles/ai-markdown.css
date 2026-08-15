@@ -1,0 +1,217 @@
+/* ---------------------------------------------------------------------------
+ * AI Markdown Content
+ * ---------------------------------------------------------------------------
+ * Styles for react-markdown output rendered inside Studyback chat bubbles and
+ * AI surfaces. Scoped to the `.ai-markdown` container so it never leaks into
+ * the rest of the design system. Uses tokens from design-tokens.css.
+ * --------------------------------------------------------------------------- */
+
+.ai-markdown {
+  font-family: var(--font-body);
+  font-size: 0.875rem; /* text-sm, matches chat bubbles */
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+/* Normalize spacing at bubble edges */
+.ai-markdown > :first-child {
+  margin-top: 0;
+}
+.ai-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+/* Paragraphs */
+.ai-markdown p {
+  margin: 0 0 0.75em;
+}
+
+/* Headings */
+.ai-markdown h1,
+.ai-markdown h2,
+.ai-markdown h3,
+.ai-markdown h4,
+.ai-markdown h5,
+.ai-markdown h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.3;
+  margin: 1.25em 0 0.5em;
+}
+.ai-markdown h1 { font-size: 1.5rem; }
+.ai-markdown h2 { font-size: 1.3rem; }
+.ai-markdown h3 { font-size: 1.15rem; }
+.ai-markdown h4 { font-size: 1rem; }
+.ai-markdown h5,
+.ai-markdown h6 {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+/* Inline emphasis */
+.ai-markdown strong {
+  font-weight: 700;
+}
+.ai-markdown em {
+  font-style: italic;
+}
+.ai-markdown del {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
+}
+
+/* Lists */
+.ai-markdown ul,
+.ai-markdown ol {
+  margin: 0 0 0.875em;
+  padding-left: 1.5em;
+}
+.ai-markdown ul { list-style: disc; }
+.ai-markdown ol { list-style: decimal; }
+.ai-markdown li {
+  margin: 0.35em 0;
+  padding-left: 0.25em;
+}
+.ai-markdown li > p {
+  margin: 0;
+}
+.ai-markdown li > ul,
+.ai-markdown li > ol {
+  margin: 0.35em 0 0;
+}
+
+/* GFM task lists */
+.ai-markdown .contains-task-list {
+  list-style: none;
+  padding-left: 1.1em;
+}
+.ai-markdown .task-list-item input[type='checkbox'] {
+  margin-right: 0.45em;
+  accent-color: var(--color-primary);
+}
+
+/* Blockquotes */
+.ai-markdown blockquote {
+  margin: 0.875em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--color-text-secondary);
+}
+.ai-markdown blockquote > :first-child {
+  margin-top: 0;
+}
+.ai-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+/* Horizontal rules */
+.ai-markdown hr {
+  margin: 1.25em 0;
+  border: 0;
+  border-top: 1px solid var(--color-border-token);
+}
+
+/* Links */
+.ai-markdown a {
+  color: var(--color-info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+.ai-markdown a:hover {
+  color: var(--color-text-primary);
+}
+
+/* Inline code */
+.ai-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: rgba(15, 23, 42, 0.07);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+  color: inherit;
+  word-break: break-word;
+}
+
+/* Fenced code blocks — contained and horizontally scrollable */
+.ai-markdown pre {
+  margin: 0 0 0.875em;
+  padding: 0.875em 1em;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 6px;
+  background: #0f172a; /* slate-900, matches Studyback CTAs */
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+.ai-markdown pre code {
+  display: block;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+/* Tables — responsive, horizontally scrollable, never overflow the page */
+.ai-markdown-table-wrap {
+  max-width: 100%;
+  margin: 0 0 0.875em;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.ai-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+.ai-markdown th {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  white-space: nowrap;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--color-text-primary);
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--color-border-token);
+}
+.ai-markdown td {
+  padding: 0.5em 0.75em;
+  border: 1px solid var(--color-border-token);
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+.ai-markdown tbody tr:nth-child(even) {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+/* KaTeX mathematics — keep formulas intact and scrollable when wide */
+.ai-markdown .katex {
+  white-space: nowrap;
+}
+.ai-markdown .katex-display {
+  margin: 0.875em 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+  -webkit-overflow-scrolling: touch;
+}

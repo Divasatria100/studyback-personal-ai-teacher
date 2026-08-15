@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { materialService, studySessionService, quizService } from '../services/api';
 import { Card, Button, Badge } from '../components/Shared';
+import MarkdownContent from '../components/MarkdownContent';
 import { 
   BookOpen, 
   HelpCircle, 
@@ -413,24 +414,18 @@ export default function Workspace() {
                       className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
                       <div 
-                        className={`p-4 max-w-xl text-sm font-body leading-relaxed border ${
+                        className={`p-4 max-w-xl min-w-0 text-sm font-body leading-relaxed border ${
                           msg.sender === 'user' 
                             ? 'bg-slate-900 text-white border-slate-900' 
                             : 'bg-white/90 text-slate-900 border-slate-200 shadow-sm'
                         }`}
                         style={{ borderRadius: 'var(--radius-glass)' }}
                       >
-                        <div className="prose prose-slate max-w-none">
-                          {msg.text.split('\n\n').map((paragraph, idx) => (
-                            <p key={idx} className="mb-2 last:mb-0">
-                              {paragraph.startsWith('###') ? (
-                                <span className="font-display font-bold text-base block mt-1 mb-2">{paragraph.replace('###', '')}</span>
-                              ) : paragraph.startsWith('-') ? (
-                                <span className="block pl-3 border-l-2 border-slate-800 my-1">{paragraph}</span>
-                              ) : paragraph}
-                            </p>
-                          ))}
-                        </div>
+                        {msg.sender === 'user' ? (
+                          <div className="whitespace-pre-wrap break-words">{msg.text}</div>
+                        ) : (
+                          <MarkdownContent>{msg.text}</MarkdownContent>
+                        )}
                       </div>
                     </div>
                   ))
@@ -577,10 +572,10 @@ export default function Workspace() {
                         ? <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" /> 
                         : <XCircle className="h-5 w-5 text-red-650 flex-shrink-0 mt-0.5" />}
                       <div>
-                        <span className="font-display font-semibold block uppercase text-xs tracking-wide mb-1">
-                          {quizAnswerVerdict.is_correct ? 'Correct' : 'Incorrect'}
-                        </span>
-                        <p>{quizAnswerVerdict.ai_feedback}</p>
+<span className="font-display font-semibold block uppercase text-xs tracking-wide mb-1">
+                            {quizAnswerVerdict.is_correct ? 'Correct' : 'Incorrect'}
+                          </span>
+                          <MarkdownContent>{quizAnswerVerdict.ai_feedback}</MarkdownContent>
                       </div>
                     </div>
                   )}
