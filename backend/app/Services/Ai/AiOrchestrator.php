@@ -131,7 +131,11 @@ final class AiOrchestrator implements AiServiceInterface
         }
 
         if ($this->fallback !== null) {
-            return $this->attempt($this->fallback, $messages, $consume, $hadTransportSuccess, $lastError);
+            try {
+                return $this->attempt($this->fallback, $messages, $consume, $hadTransportSuccess, $lastError);
+            } catch (ExhaustedProvider) {
+                // fallback also exhausted — fall through to the final failure handler
+            }
         }
 
         throw $this->finalFailure($hadTransportSuccess, $lastError);

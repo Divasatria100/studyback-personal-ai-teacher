@@ -12,6 +12,13 @@ interface SubtopicRepositoryInterface
     public function findInTopic(int $topicId, int $subtopicId): ?Subtopic;
 
     /**
+     * Find a subtopic that belongs to any topic of the given material. Subtopics
+     * are always reached through their owning material, never by a bare global
+     * lookup by id (API Design §5) — returns null for foreign subtopics.
+     */
+    public function findBelongsToMaterial(int $materialId, int $subtopicId): ?Subtopic;
+
+    /**
      * Bulk-insert subtopics and return the persisted models.
      *
      * @param  list<array{topic_id: int, name: string, description?: string|null, order_index?: int}>  $subtopicsData

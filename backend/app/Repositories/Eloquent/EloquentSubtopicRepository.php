@@ -21,6 +21,14 @@ class EloquentSubtopicRepository implements SubtopicRepositoryInterface
             ->find($subtopicId);
     }
 
+    public function findBelongsToMaterial(int $materialId, int $subtopicId): ?Subtopic
+    {
+        return Subtopic::query()
+            ->where('subtopics.id', $subtopicId)
+            ->whereHas('topic', fn ($topic) => $topic->where('material_id', $materialId))
+            ->first();
+    }
+
     public function bulkCreate(array $subtopicsData): Collection
     {
         $subtopics = new Collection;

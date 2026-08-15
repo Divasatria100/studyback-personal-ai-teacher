@@ -83,7 +83,7 @@ final class StudySessionService
      */
     public function explain(StudySession $session, int $subtopicId, string $intent, ?string $message): array
     {
-        $subtopic = $this->subtopics->findById($subtopicId);
+        $subtopic = $this->subtopics->findBelongsToMaterial($session->material_id, $subtopicId);
 
         if ($subtopic === null) {
             throw new SubtopicNotInMaterialException;
