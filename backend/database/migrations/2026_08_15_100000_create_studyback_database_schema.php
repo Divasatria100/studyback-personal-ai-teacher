@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -50,8 +51,8 @@ return new class extends Migration
             $table->timestampsTz(); // created_at, updated_at
 
             // Constraints
-            $table->check('file_size_bytes > 0', 'materials_file_size_bytes_check');
-            $table->check("status IN ('processing', 'ready', 'failed')", 'materials_status_check');
+            $this->addCheckConstraint('materials', 'materials_file_size_bytes_check', 'file_size_bytes > 0');
+            $this->addCheckConstraint('materials', 'materials_status_check', "status IN ('processing', 'ready', 'failed')");
         });
 
         // =====================================================================
@@ -87,8 +88,8 @@ return new class extends Migration
             $table->timestampsTz(); // created_at, updated_at
 
             // Constraints
-            $table->check('mastery_score BETWEEN 0 AND 100', 'subtopics_mastery_score_check');
-            $table->check("status IN ('not_started', 'in_progress', 'needs_review', 'mastered')", 'subtopics_status_check');
+            $this->addCheckConstraint('subtopics', 'subtopics_mastery_score_check', 'mastery_score BETWEEN 0 AND 100');
+            $this->addCheckConstraint('subtopics', 'subtopics_status_check', "status IN ('not_started', 'in_progress', 'needs_review', 'mastered')");
 
             // Unique constraint
             $table->unique(['topic_id', 'name'], 'subtopics_topic_id_name_unique');
@@ -136,9 +137,9 @@ return new class extends Migration
             $table->timestampsTz(); // created_at, updated_at
 
             // Constraints
-            $table->check("mode IN ('teach_me', 'quiz_me', 'review_weak_topics', 'guided_study_session')", 'study_sessions_mode_check');
-            $table->check("difficulty IS NULL OR difficulty IN ('easy', 'medium', 'hard')", 'study_sessions_difficulty_check');
-            $table->check("status IN ('active', 'completed')", 'study_sessions_status_check');
+            $this->addCheckConstraint('study_sessions', 'study_sessions_mode_check', "mode IN ('teach_me', 'quiz_me', 'review_weak_topics', 'guided_study_session')");
+            $this->addCheckConstraint('study_sessions', 'study_sessions_difficulty_check', "difficulty IS NULL OR difficulty IN ('easy', 'medium', 'hard')");
+            $this->addCheckConstraint('study_sessions', 'study_sessions_status_check', "status IN ('active', 'completed')");
         });
 
         // =====================================================================
@@ -181,11 +182,11 @@ return new class extends Migration
             $table->timestampsTz(); // created_at, updated_at
 
             // Constraints
-            $table->check("difficulty IS NULL OR difficulty IN ('easy', 'medium', 'hard')", 'quizzes_difficulty_check');
-            $table->check("status IN ('in_progress', 'completed')", 'quizzes_status_check');
-            $table->check('total_questions >= 0', 'quizzes_total_questions_check');
-            $table->check('correct_count IS NULL OR correct_count >= 0', 'quizzes_correct_count_check');
-            $table->check('score IS NULL OR score BETWEEN 0 AND 100', 'quizzes_score_check');
+            $this->addCheckConstraint('quizzes', 'quizzes_difficulty_check', "difficulty IS NULL OR difficulty IN ('easy', 'medium', 'hard')");
+            $this->addCheckConstraint('quizzes', 'quizzes_status_check', "status IN ('in_progress', 'completed')");
+            $this->addCheckConstraint('quizzes', 'quizzes_total_questions_check', 'total_questions >= 0');
+            $this->addCheckConstraint('quizzes', 'quizzes_correct_count_check', 'correct_count IS NULL OR correct_count >= 0');
+            $this->addCheckConstraint('quizzes', 'quizzes_score_check', 'score IS NULL OR score BETWEEN 0 AND 100');
         });
 
         // =====================================================================
@@ -207,7 +208,7 @@ return new class extends Migration
             $table->timestampTz('created_at')->useCurrent(); // Immutable, no updated_at
 
             // Constraint
-            $table->check("question_type IN ('multiple_choice', 'true_false', 'short_answer')", 'quiz_questions_question_type_check');
+            $this->addCheckConstraint('quiz_questions', 'quiz_questions_question_type_check', "question_type IN ('multiple_choice', 'true_false', 'short_answer')");
         });
 
         // =====================================================================
@@ -268,6 +269,24 @@ return new class extends Migration
             $table->index('quiz_id', 'idx_quiz_questions_quiz');
             $table->index('subtopic_id', 'idx_quiz_questions_subtopic');
         });
+    }
+
+    /**
+     * Add a named CHECK constraint to a table.
+     *
+     * Laravel's Blueprint API does not provide a first-class `check()` method on this
+     * framework version, so constraints are emitted as raw `ALTER TABLE ... ADD CONSTRAINT`
+     * statements on PostgreSQL (the target database per Database Design §7/§20). SQLite is
+     * used only for the automated test suite (phpunit.xml) and does not support adding check
+     * constraints to an existing table via ALTER TABLE, so they are skipped there.
+     */
+    private function addCheckConstraint(string $table, string $name, string $expression): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        DB::statement("ALTER TABLE {$table} ADD CONSTRAINT {$name} CHECK ({$expression})");
     }
 
     /**
