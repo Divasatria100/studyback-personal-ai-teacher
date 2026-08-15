@@ -28,6 +28,13 @@ interface SubtopicRepositoryInterface
     public function validIdsInTopic(int $topicId, array $subtopicIds): array;
 
     /**
+     * All subtopics of a topic, flattened to id/name pairs for AI reference.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function allInTopic(int $topicId): array;
+
+    /**
      * Recompute a subtopic's mastery as the cumulative average of every answer ever
      * recorded for it (Database Design §8), derive the learning status from the fixed
      * thresholds, and persist both. Returns the updated subtopic.

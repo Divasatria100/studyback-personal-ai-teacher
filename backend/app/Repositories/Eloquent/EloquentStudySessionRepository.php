@@ -29,10 +29,11 @@ class EloquentStudySessionRepository implements StudySessionRepositoryInterface
     {
         $now = Carbon::now();
 
-        $pivotRows = array_map(
-            fn (int $topicId) => [$topicId => ['created_at' => $now]],
-            $topicIds
-        );
+        $pivotRows = [];
+
+        foreach ($topicIds as $topicId) {
+            $pivotRows[$topicId] = ['created_at' => $now];
+        }
 
         $studySession->topics()->sync($pivotRows);
     }

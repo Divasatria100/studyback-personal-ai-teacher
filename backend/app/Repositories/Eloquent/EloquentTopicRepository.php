@@ -31,7 +31,7 @@ class EloquentTopicRepository implements TopicRepositoryInterface
 
     public function bulkCreateForMaterial(int $materialId, array $topicsData): Collection
     {
-        $topics = new Collection();
+        $topics = new Collection;
 
         foreach ($topicsData as $data) {
             $topics->push(Topic::query()->create([

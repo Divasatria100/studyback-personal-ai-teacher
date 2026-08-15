@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Ai\Exceptions\AiProviderException;
+use App\Services\Ai\Exceptions\InvalidStructuredOutputException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -15,5 +17,15 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->render(function (AiProviderException $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'The AI service is temporarily unavailable. Please try again.'], 503);
+            }
+        });
+
+        $exceptions->render(function (InvalidStructuredOutputException $e, $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'The AI returned an unprocessable result. Please try again.'], 503);
+            }
+        });
     })->create();

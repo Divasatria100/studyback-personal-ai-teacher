@@ -23,7 +23,7 @@ class EloquentSubtopicRepository implements SubtopicRepositoryInterface
 
     public function bulkCreate(array $subtopicsData): Collection
     {
-        $subtopics = new Collection();
+        $subtopics = new Collection;
 
         foreach ($subtopicsData as $data) {
             $subtopics->push(Subtopic::query()->create([
@@ -48,6 +48,19 @@ class EloquentSubtopicRepository implements SubtopicRepositoryInterface
             ->whereIn('id', $subtopicIds)
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
+    public function allInTopic(int $topicId): array
+    {
+        return Subtopic::query()
+            ->where('topic_id', $topicId)
+            ->orderBy('order_index')
+            ->get()
+            ->map(fn (Subtopic $subtopic): array => [
+                'id' => $subtopic->id,
+                'name' => $subtopic->name,
+            ])
             ->all();
     }
 
