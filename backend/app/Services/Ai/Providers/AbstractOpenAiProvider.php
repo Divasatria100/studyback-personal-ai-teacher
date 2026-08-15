@@ -6,6 +6,7 @@ use App\Services\Ai\Contracts\LLMProviderInterface;
 use App\Services\Ai\Exceptions\AiProviderException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Base adapter for OpenAI-compatible HTTP providers (OpenRouter, Featherless).
@@ -56,7 +57,35 @@ abstract class AbstractOpenAiProvider implements LLMProviderInterface
             throw AiProviderException::unreachable(sprintf('Provider "%s" returned an empty response.', $this->name()));
         }
 
+        // Detect and reject safety-only / unusable responses (e.g., "User Safety: safe")
+        if ($this->isUnusableContent($content)) {
+            Log::warning('[AI PROVIDER] Unusable response detected', [
+                'provider' => $this->name(),
+                'model' => $model,
+                'content_preview' => substr(trim($content), 0, 100),
+            ]);
+            throw AiProviderException::unreachable('Provider returned an unusable response (safety-only).');
+        }
+
         return $content;
+    }
+
+    /**
+     * Check if the AI response content is unusable (safety-only, etc.).
+     * Only exact/normalized matches for known unusable patterns are rejected.
+     * Valid content with similar words is preserved.
+     */
+    protected function isUnusableContent(string $content): bool
+    {
+        $normalized = strtolower(trim($content));
+
+        // Exact safety-only responses observed from providers
+        $unusablePatterns = [
+            'user safety: safe',
+            'user safety: unsafe',
+        ];
+
+        return in_array($normalized, $unusablePatterns, true);
     }
 
     protected function name(): string
