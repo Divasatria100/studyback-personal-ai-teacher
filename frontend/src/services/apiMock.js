@@ -1,3 +1,8 @@
+// @deprecated — DEV/TEST ONLY. The production application flow now uses the
+// real Laravel backend through services/api.js (axios + Bearer token). This
+// file is retained for local experimentation/mock scenarios but is NOT
+// imported anywhere in src and therefore never runs in the app.
+//
 // Stateful client-side Mock API Database stored in localStorage
 const LATENCY = 300; // ms
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { materialService } from '../services/apiMock';
+import { materialService } from '../services/api';
 import { Card, Button, ProgressBar, Badge } from '../components/Shared';
 import { Upload, FileText, ChevronRight, User, BookOpen, GraduationCap, Award } from 'lucide-react';
 

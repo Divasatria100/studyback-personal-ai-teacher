@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { materialService } from '../services/apiMock';
-import { Card, Input, Button, Badge } from '../components/Shared';
-import { Search, Filter, BookOpen, Calendar, HelpCircle, FileText, Upload, ChevronRight } from 'lucide-react';
+import { materialService } from '../services/api';
+import { Card, Input, Button, Badge, ProgressBar } from '../components/Shared';
+import { Search, Filter, BookOpen, Calendar, HelpCircle, FileText, Upload, ChevronRight, GraduationCap } from 'lucide-react';
 
 export default function MyMaterials() {
   const navigate = useNavigate();

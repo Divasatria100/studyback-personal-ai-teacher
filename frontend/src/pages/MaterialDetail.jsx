@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { materialService, studySessionService } from '../services/apiMock';
+import { materialService, studySessionService } from '../services/api';
 import { Card, Button, Badge, ProgressBar } from '../components/Shared';
 import { Download, Play, BookOpen, Calendar, Award, FileText, ChevronRight, Check } from 'lucide-react';
 
@@ -114,7 +114,9 @@ export default function MaterialDetail() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">Material Document</span>
-                <Badge variant="success">Analyzed</Badge>
+                <Badge variant={material.status === 'ready' ? 'success' : material.status === 'failed' ? 'error' : 'warning'}>
+                  {material.status === 'ready' ? 'Analyzed' : material.status}
+                </Badge>
               </div>
               <h1 className="text-3xl font-bold font-display text-slate-900 leading-tight">
                 {material.title}

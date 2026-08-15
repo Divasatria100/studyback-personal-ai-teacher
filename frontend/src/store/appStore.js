@@ -1,11 +1,11 @@
 import { create } from 'zustand';
-import { authService } from '../services/apiMock';
+import { authService } from '../services/api';
 
 export const useAppStore = create((set, get) => ({
-  user: { id: 1, name: 'Demo', email: 'demo@gmail' },
-  isAuthenticated: true,
+  user: null,
+  isAuthenticated: false,
   toasts: [],
-  isLoadingUser: false,
+  isLoadingUser: true,
 
   // Toast actions
   addToast: (message, type = 'success') => {
@@ -19,6 +19,12 @@ export const useAppStore = create((set, get) => ({
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id)
     }));
+  },
+
+  // Session expired / token invalid -> clear state (SessionWatcher redirects)
+  handleUnauthorized: () => {
+    set({ user: null, isAuthenticated: false });
+    get().addToast('Your session has expired. Please sign in again.', 'error');
   },
 
   // Auth actions

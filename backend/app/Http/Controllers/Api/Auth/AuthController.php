@@ -9,7 +9,6 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Auth module endpoints (API Design §5). Bearer token issued on register/login,
@@ -38,9 +37,9 @@ class AuthController extends Controller
         $user = User::query()->where('email', $request->input('email'))->first();
 
         if ($user === null || ! Hash::check($request->input('password'), $user->password)) {
-            throw ValidationException::withMessages([
-                'email' => ['The provided credentials are incorrect.'],
-            ]);
+            return response()->json([
+                'message' => 'The provided credentials are incorrect.',
+            ], 401);
         }
 
         $token = $user->createToken('default')->plainTextToken;
@@ -60,6 +59,13 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user()->only('id', 'name', 'email', 'created_at'));
+        $user = $request->user();
+
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'created_at' => $user->created_at->utc()->format('Y-m-d\TH:i:s\Z'),
+        ]);
     }
 }

@@ -54,7 +54,7 @@ class AuthApiTest extends TestCase
         $this->postJson('/api/auth/login', [
             'email' => 'nobody@example.com',
             'password' => 'wrong-password',
-        ])->assertStatus(422);
+        ])->assertStatus(401);
     }
 
     public function test_me_requires_authentication(): void

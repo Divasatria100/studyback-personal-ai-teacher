@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import AppLayout from './components/AppLayout';
 import Home from './pages/Home';
 import MyMaterials from './pages/MyMaterials';
@@ -9,6 +9,24 @@ import Workspace from './pages/Workspace';
 import Login from './pages/Login';
 import { useAppStore } from './store/appStore';
 import './index.css';
+
+// Reads the "studyback:unauthorized" event emitted by the API client when a
+// 401 is returned for an authenticated request, then redirects to Login.
+function SessionWatcher() {
+  const navigate = useNavigate();
+  const handleUnauthorized = useAppStore((state) => state.handleUnauthorized);
+
+  useEffect(() => {
+    const handler = () => {
+      handleUnauthorized();
+      navigate('/login', { replace: true });
+    };
+    window.addEventListener('studyback:unauthorized', handler);
+    return () => window.removeEventListener('studyback:unauthorized', handler);
+  }, [handleUnauthorized, navigate]);
+
+  return null;
+}
 
 // Protected Route Wrapper
 function ProtectedRoute({ children }) {
@@ -39,6 +57,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <SessionWatcher />
       <Routes>
         {/* Public Routes */}
         <Route 

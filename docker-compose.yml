@@ -30,7 +30,6 @@ services:
     environment:
       APP_NAME: ${APP_NAME:-Studyback}
       APP_ENV: ${APP_ENV:-local}
-      APP_KEY: ${APP_KEY:-}
       APP_DEBUG: ${APP_DEBUG:-true}
       APP_URL: ${APP_URL:-http://localhost}
       DB_CONNECTION: pgsql
@@ -63,7 +62,8 @@ services:
     container_name: studyback_frontend
     working_dir: /app
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_API_URL: ${VITE_API_URL:-}
+      VITE_PROXY_TARGET: ${VITE_PROXY_TARGET:-http://backend:8000}
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules

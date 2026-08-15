@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { materialService, studySessionService, quizService } from '../services/apiMock';
+import { materialService, studySessionService, quizService } from '../services/api';
 import { Card, Button, Badge } from '../components/Shared';
 import { 
   BookOpen, 
@@ -530,7 +530,7 @@ export default function Workspace() {
                     <span className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                       Question {currentQuestionIndex + 1} of {currentQuiz.total_questions}
                     </span>
-                    <Badge variant="warning">{currentQuiz.difficulty}</Badge>
+                    <Badge variant="warning">{session.difficulty}</Badge>
                   </div>
 
                   {/* Question Stem */}
