@@ -46,6 +46,7 @@ export default function Workspace() {
   const [selectedAnswerOption, setSelectedAnswerOption] = useState('');
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
   const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [isNextQuestionLoading, setIsNextQuestionLoading] = useState(false);
 
   // Guided Session flow state
   // Stages: 0 = Learn (Teach Me), 1 = Check Understanding (Quiz question), 2 = Evaluate (results), 3 = Review (Review Weak Topics if any)
@@ -145,6 +146,7 @@ export default function Workspace() {
       setQuizAnswerVerdict(null);
       setSelectedAnswerOption('');
     } catch (err) {
+      console.error('Failed to generate quiz:', err);
       addToast('Failed to generate quiz', 'error');
     } finally {
       setIsGeneratingQuiz(false);
@@ -154,12 +156,17 @@ export default function Workspace() {
   // Submit quiz answer
   const handleSubmitAnswer = async () => {
     if (!selectedAnswerOption) {
-      addToast('Please select an option', 'warning');
+      addToast('Please select or type an answer', 'warning');
       return;
     }
-    
+
+    const question = currentQuiz?.questions?.[currentQuestionIndex];
+    if (!question) {
+      addToast('Question is not available', 'error');
+      return;
+    }
+
     setIsSubmittingAnswer(true);
-    const question = currentQuiz.questions[currentQuestionIndex];
     try {
       const res = await quizService.submitAnswer(currentQuiz.id, question.id, selectedAnswerOption);
       setQuizAnswerVerdict({
@@ -173,24 +180,46 @@ export default function Workspace() {
       const updatedTopics = await materialService.getTopics(session.material_id);
       setTopicsData(updatedTopics);
     } catch (err) {
+      console.error('Failed to submit answer:', err);
       addToast(err.message || 'Error submitting answer', 'error');
     } finally {
       setIsSubmittingAnswer(false);
     }
   };
 
-  // Switch to next quiz question or show completion screen
-  const handleNextQuizQuestion = () => {
-    if (quizAnswerVerdict.quiz_status === 'completed') {
-      // Fetch full quiz summary details
-      quizService.get(currentQuiz.id).then(q => {
-        setCurrentQuiz(q);
-      });
-      if (session.mode === 'guided_study_session') {
-        setGuidedStage(2); // Go to Evaluate results summary
-      }
-    } else {
-      setCurrentQuestionIndex(prev => prev + 1);
+  // Advance to the next question, or load the final results summary.
+  // Questions are generated up-front as a full array, so moving to the next
+  // question is synchronous; the border index is guarded so it can never
+  // run past the loaded array (which would previously render a blank screen).
+  const handleNextQuizQuestion = async () => {
+    const questions = currentQuiz?.questions || [];
+    const isLast = currentQuestionIndex + 1 >= questions.length;
+    const wasCompleted = quizAnswerVerdict?.quiz_status === 'completed';
+    const quizDone = wasCompleted || isLast;
+
+    if (!quizDone) {
+      setCurrentQuestionIndex((prev) => prev + 1);
+      setQuizAnswerVerdict(null);
+      setSelectedAnswerOption('');
+      return;
+    }
+
+    // Last question answered - load the completed results summary.
+    setIsNextQuestionLoading(true);
+    try {
+      const q = await quizService.get(currentQuiz.id);
+      setCurrentQuiz(q);
+    } catch (err) {
+      console.error('Failed to load quiz results:', err);
+      addToast(err.message || 'Failed to load quiz results', 'error');
+    } finally {
+      setIsNextQuestionLoading(false);
+    }
+
+    if (session.mode === 'guided_study_session' && wasCompleted) {
+      setGuidedStage(2); // Go to Evaluate results summary
+    } else if (wasCompleted) {
+      // quiz_me: clear the verdict so the completion screen replaces the question.
       setQuizAnswerVerdict(null);
       setSelectedAnswerOption('');
     }
@@ -240,6 +269,13 @@ export default function Workspace() {
     const s = t.subtopics.find(sub => sub.id === selectedSubtopicId);
     if (s) activeSubtopic = s;
   });
+
+  // Quiz phase / completion gates used by the CHECK UNDERSTANDING renderer.
+  // Splitting the "phase" from "quiz exists" ensures the loading/error states
+  // render while the AI generation is still in flight (no blank regions).
+  const inQuizPhase = session.mode === 'quiz_me' || (session.mode === 'guided_study_session' && guidedStage === 1);
+  const quizCompletedViewed = session.mode === 'quiz_me' && currentQuiz?.status === 'completed';
+  const currentQuestion = currentQuiz?.questions?.[currentQuestionIndex];
 
   const sidebarStatusIcon = (status) => {
     if (status === 'mastered') return <span className="text-emerald-600 font-bold font-mono">✓</span>;
@@ -504,21 +540,39 @@ export default function Workspace() {
             </div>
           ) : null}
 
-          {/* QUIZ ME / CHECK UNDERSTANDING FLOW */}
-          {((session.mode === 'quiz_me' || (session.mode === 'guided_study_session' && guidedStage === 1)) && currentQuiz) ? (
+{/* QUIZ ME / CHECK UNDERSTANDING FLOW */}
+          {inQuizPhase && !quizCompletedViewed ? (
             <div className="flex-1 flex flex-col justify-between h-full">
-              
+
               {/* Quiz Wizard Content */}
-              {isGeneratingQuiz ? (
-                <div className="text-center py-12 space-y-3">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900 mx-auto" />
-                  <span className="font-mono text-xs font-semibold uppercase text-slate-600">Generating Assessment Questions...</span>
+              {isGeneratingQuiz || isNextQuestionLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-3 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900" />
+                  <span className="font-mono text-xs font-semibold uppercase text-slate-600">
+                    {isNextQuestionLoading ? 'Preparing your results...' : 'Preparing your question...'}
+                  </span>
+                  <p className="font-body text-xs text-slate-500 max-w-xs">
+                    AI is preparing content based on your material.
+                  </p>
+                </div>
+              ) : !currentQuiz ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                  <AlertCircle className="h-10 w-10 text-red-600 mx-auto" />
+                  <p className="font-body text-sm text-slate-700">
+                    We couldn't prepare the questions. Please try again.
+                  </p>
+                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                    Retry
+                  </Button>
                 </div>
               ) : currentQuiz.questions.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 font-body">
-                  No questions could be generated.
+                <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                  <p className="font-body text-sm text-slate-500">No questions could be generated.</p>
+                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                    Retry
+                  </Button>
                 </div>
-              ) : (
+              ) : currentQuestion ? (
                 <div className="space-y-6">
                   {/* Progress info */}
                   <div className="flex justify-between items-center border-b border-slate-900/5 pb-3">
@@ -531,81 +585,133 @@ export default function Workspace() {
                   {/* Question Stem */}
                   <div className="space-y-4">
                     <h2 className="text-lg font-bold font-display text-slate-900">
-                      {currentQuiz.questions[currentQuestionIndex].question_text}
+                      {currentQuestion.question_text.replace(/^#{1,6}\s+/, '')}
                     </h2>
-                    
-                    {/* Option List Cards */}
-                    <div className="space-y-3">
-                      {currentQuiz.questions[currentQuestionIndex].options.map((opt) => {
-                        const isSelected = selectedAnswerOption === opt;
-                        const isAnswered = quizAnswerVerdict !== null;
-                        
-                        return (
-                          <div
-                            key={opt}
-                            onClick={() => !isAnswered && setSelectedAnswerOption(opt)}
-                            className={`p-3 border cursor-pointer flex items-center justify-between text-sm transition-all ${
-                              isSelected 
-                                ? 'border-slate-900 bg-slate-900/5 font-semibold' 
-                                : 'border-slate-350 hover:bg-white/10'
-                            } ${isAnswered ? 'opacity-85 pointer-events-none' : ''}`}
-                            style={{ borderRadius: 'var(--radius-control)' }}
-                          >
-                            <span className="font-body text-slate-800">{opt}</span>
-                            <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${isSelected ? 'bg-slate-900 border-slate-900 text-white' : 'border-slate-400 bg-white'}`}>
-                              {isSelected && <span className="h-2 w-2 bg-white rounded-full" />}
+
+                    {/* Answer controls based on question type */}
+                    {currentQuestion.question_type === 'true_false' ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        {['True', 'False'].map((choice) => {
+                          const isSelected = selectedAnswerOption === choice;
+                          const isAnswered = quizAnswerVerdict !== null;
+
+                          return (
+                            <div
+                              key={choice}
+                              onClick={() => !isAnswered && setSelectedAnswerOption(choice)}
+                              className={`p-3 border cursor-pointer flex items-center justify-center text-sm font-semibold transition-all ${
+                                isSelected
+                                  ? 'border-slate-900 bg-slate-900/5'
+                                  : 'border-slate-350 hover:bg-white/10'
+                              } ${isAnswered ? 'opacity-85 pointer-events-none' : ''}`}
+                              style={{ borderRadius: 'var(--radius-control)' }}
+                            >
+                              {choice}
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    ) : currentQuestion.question_type === 'short_answer' ? (
+                      <div className="space-y-1">
+                        <textarea
+                          value={selectedAnswerOption}
+                          disabled={quizAnswerVerdict !== null}
+                          onChange={(e) => setSelectedAnswerOption(e.target.value)}
+                          placeholder="Type your answer..."
+                          rows={3}
+                          className="w-full p-3 bg-white/60 border border-slate-300 font-body text-sm text-slate-900 focus:outline-none focus:border-slate-850 focus:ring-1 focus:ring-slate-850 disabled:opacity-85"
+                          style={{ borderRadius: 'var(--radius-control)' }}
+                        />
+                        <span className="font-mono text-[9px] text-slate-500 uppercase tracking-wider">
+                          Type your answer then press Submit
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {(currentQuestion.options || []).map((opt) => {
+                          const isSelected = selectedAnswerOption === opt;
+                          const isAnswered = quizAnswerVerdict !== null;
+
+                          return (
+                            <div
+                              key={opt}
+                              onClick={() => !isAnswered && setSelectedAnswerOption(opt)}
+                              className={`p-3 border cursor-pointer flex items-center justify-between text-sm transition-all ${
+                                isSelected
+                                  ? 'border-slate-900 bg-slate-900/5 font-semibold'
+                                  : 'border-slate-350 hover:bg-white/10'
+                              } ${isAnswered ? 'opacity-85 pointer-events-none' : ''}`}
+                              style={{ borderRadius: 'var(--radius-control)' }}
+                            >
+                              <span className="font-body text-slate-800">{opt}</span>
+                              <div className={`h-4 w-4 rounded-full border flex items-center justify-center ${isSelected ? 'bg-slate-900 border-slate-900 text-white' : 'border-slate-400 bg-white'}`}>
+                                {isSelected && <span className="h-2 w-2 bg-white rounded-full" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Grading Result feedback */}
                   {quizAnswerVerdict && (
                     <div className={`p-4 border font-body text-sm leading-relaxed flex items-start gap-3 animate-in fade-in duration-200 ${
-                      quizAnswerVerdict.is_correct 
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                      quizAnswerVerdict.is_correct
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : 'bg-red-50 text-red-800 border-red-200'
                     }`} style={{ borderRadius: 'var(--radius-glass)' }}>
-                      {quizAnswerVerdict.is_correct 
-                        ? <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" /> 
+                      {quizAnswerVerdict.is_correct
+                        ? <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
                         : <XCircle className="h-5 w-5 text-red-650 flex-shrink-0 mt-0.5" />}
                       <div>
-<span className="font-display font-semibold block uppercase text-xs tracking-wide mb-1">
-                            {quizAnswerVerdict.is_correct ? 'Correct' : 'Incorrect'}
-                          </span>
-                          <MarkdownContent>{quizAnswerVerdict.ai_feedback}</MarkdownContent>
+                        <span className="font-display font-semibold block uppercase text-xs tracking-wide mb-1">
+                          {quizAnswerVerdict.is_correct ? 'Correct' : 'Incorrect'}
+                        </span>
+                        <MarkdownContent>{quizAnswerVerdict.ai_feedback}</MarkdownContent>
                       </div>
                     </div>
                   )}
                 </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4 text-center">
+                  <AlertCircle className="h-10 w-10 text-red-600 mx-auto" />
+                  <p className="font-body text-sm text-slate-700">
+                    Question not available. Please try again.
+                  </p>
+                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                    Retry
+                  </Button>
+                </div>
               )}
 
-              {/* Quiz Submit/Next Controls */}
-              <div className="border-t border-slate-900/10 pt-4 flex justify-end">
-                {quizAnswerVerdict ? (
-                  <Button 
-                    variant="primary" 
-                    onClick={handleNextQuizQuestion}
-                  >
-                    {quizAnswerVerdict.quiz_status === 'completed' ? 'View Results &rarr;' : 'Next Question &rarr;'}
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="primary" 
-                    onClick={handleSubmitAnswer}
-                    loading={isSubmittingAnswer}
-                  >
-                    Submit Answer
-                  </Button>
-                )}
-              </div>
+              {/* Quiz Submit/Next Controls - only shown when a question is on screen */}
+              {currentQuiz && currentQuiz.questions.length > 0 && currentQuestion && (
+                <div className="border-t border-slate-900/10 pt-4 flex justify-end">
+                  {quizAnswerVerdict ? (
+                    <Button
+                      variant="primary"
+                      onClick={handleNextQuizQuestion}
+                      loading={isNextQuestionLoading}
+                    >
+                      {quizAnswerVerdict.quiz_status === 'completed' ? 'View Results →' : 'Next Question →'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      onClick={handleSubmitAnswer}
+                      loading={isSubmittingAnswer}
+                    >
+                      Submit Answer
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
 
           {/* QUIZ COMPLETION / EVALUATION RESULTS SCREEN */}
-          {(guidedStage === 2 || (session.mode === 'quiz_me' && currentQuiz?.status === 'completed')) && (
+          {(guidedStage === 2 || quizCompletedViewed) && (
             <div className="text-center py-8 space-y-6 flex flex-col justify-between h-full">
               <div className="space-y-4">
                 <div className="h-16 w-16 bg-slate-900/5 text-slate-900 rounded-full flex items-center justify-center mx-auto">
