@@ -47,9 +47,10 @@ class Material extends Model
     }
 
     /**
-     * Current overall mastery, computed on the fly as the average subtopic
-     * mastery score across the material's subtopics (Database Design §8).
-     * Returns 0 when the material has never been studied (no subtopics).
+     * Current overall mastery, computed on the fly as the average mastery across
+     * every learning target of the material (Database Design §8): each subtopic
+     * of a topic-with-subtopics, plus each topic-only topic's own mastery.
+     * Returns 0 when the material has never been studied.
      */
     public function overallMastery(): float
     {
@@ -57,13 +58,21 @@ class Material extends Model
             return $this->masteryOverride;
         }
 
-        $score = $this->topics()
+        $scores = $this->topics()
             ->with('subtopics')
             ->get()
-            ->flatMap(fn ($topic) => $topic->subtopics)
-            ->avg('mastery_score');
+            ->flatMap(function (Topic $topic) {
+                return $topic->subtopics->isNotEmpty()
+                    ? $topic->subtopics->pluck('mastery_score')->all()
+                    : [$topic->mastery_score];
+            })
+            ->all();
 
-        return (float) $score ?? 0.0;
+        if ($scores === []) {
+            return 0.0;
+        }
+
+        return (float) (array_sum($scores) / count($scores));
     }
 
     /**

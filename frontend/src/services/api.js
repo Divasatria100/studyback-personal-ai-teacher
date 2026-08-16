@@ -234,13 +234,20 @@ export const studySessionService = {
     return data; // { id, status, ended_at }
   },
 
-  getExplanation: async (sessionId, subtopicId, intent, message) => {
+  // target: { type: 'subtopic' | 'topic', id } — topic targets only for
+  // topics without subtopics (topic-only learning targets).
+  getExplanation: async (sessionId, target, intent, message) => {
+    const payload =
+      target.type === 'topic'
+        ? { topic_id: target.id }
+        : { subtopic_id: target.id };
+
     const { data } = await client.post(`/study-sessions/${sessionId}/explanations`, {
-      subtopic_id: subtopicId,
+      ...payload,
       intent,
       message: message || undefined,
     });
-    return data; // { subtopic_id, explanation }
+    return data; // { subtopic_id?, topic_id, explanation }
   },
 };
 

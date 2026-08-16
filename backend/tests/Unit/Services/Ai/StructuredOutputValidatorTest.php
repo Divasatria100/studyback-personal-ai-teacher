@@ -101,14 +101,44 @@ class StructuredOutputValidatorTest extends TestCase
         ]);
     }
 
-    public function test_zero_total_subtopics_is_rejected(): void
+    public function test_topic_with_empty_subtopics_array_is_allowed(): void
     {
-        $this->expectException(InvalidStructuredOutputException::class);
-        $this->expectExceptionMessage('At least one subtopic is required');
-
-        $this->validator->topics([
-            ['name' => 'Empty Topic', 'subtopics' => []],
+        $topics = $this->validator->topics([
+            ['name' => 'Introduction to Cell Biology', 'subtopics' => []],
         ]);
+
+        $this->assertSame('Introduction to Cell Biology', $topics[0]['name']);
+        $this->assertSame([], $topics[0]['subtopics']);
+    }
+
+    public function test_material_with_zero_total_subtopics_is_allowed(): void
+    {
+        $topics = $this->validator->topics([
+            ['name' => 'Topic A', 'subtopics' => []],
+            ['name' => 'Topic B', 'subtopics' => []],
+        ]);
+
+        $this->assertCount(2, $topics);
+        $this->assertSame([], $topics[0]['subtopics']);
+        $this->assertSame([], $topics[1]['subtopics']);
+    }
+
+    public function test_mixed_topics_with_and_without_subtopics_are_allowed(): void
+    {
+        $topics = $this->validator->topics([
+            [
+                'name' => 'Respiratory System Functions',
+                'subtopics' => [
+                    ['name' => 'Gas Exchange'],
+                    ['name' => 'Acid-Base Balance'],
+                ],
+            ],
+            ['name' => 'Introduction to Cell Biology', 'subtopics' => []],
+        ]);
+
+        $this->assertCount(2, $topics);
+        $this->assertCount(2, $topics[0]['subtopics']);
+        $this->assertSame([], $topics[1]['subtopics']);
     }
 
     // ---------- questions ----------
@@ -236,6 +266,35 @@ class StructuredOutputValidatorTest extends TestCase
                 'subtopic_id' => 'not-a-number',
             ],
         ]);
+    }
+
+    public function test_question_without_subtopic_id_passes_in_topic_only_mode(): void
+    {
+        $questions = $this->validator->questions([
+            [
+                'question_type' => 'multiple_choice',
+                'question_text' => 'text',
+                'options' => ['A', 'B'],
+                'correct_answer' => 'A',
+            ],
+        ], false);
+
+        $this->assertNull($questions[0]['subtopic_id']);
+    }
+
+    public function test_question_subtopic_id_is_nulled_in_topic_only_mode(): void
+    {
+        $questions = $this->validator->questions([
+            [
+                'question_type' => 'multiple_choice',
+                'question_text' => 'text',
+                'options' => ['A', 'B'],
+                'correct_answer' => 'A',
+                'subtopic_id' => 42,
+            ],
+        ], false);
+
+        $this->assertNull($questions[0]['subtopic_id']);
     }
 
     // ---------- evaluation ----------

@@ -187,30 +187,53 @@ export default function MaterialDetail() {
                         {t.description}
                       </p>
                     </div>
-                    <Badge variant="neutral">{t.subtopics.length} Subtopics</Badge>
+                    {t.subtopics.length > 0 ? (
+                      <Badge variant="neutral">{t.subtopics.length} Subtopics</Badge>
+                    ) : (
+                      <Badge
+                        variant={
+                          t.status === 'mastered' ? 'success' :
+                          t.status === 'needs_review' ? 'error' :
+                          t.status === 'in_progress' ? 'warning' : 'neutral'
+                        }
+                        className="text-[9px]"
+                      >
+                        {t.status.replace('_', ' ')}
+                      </Badge>
+                    )}
                   </div>
-                  
-                  {/* Subtopics Nested list */}
-                  <div className="mt-4 pl-4 border-l-2 border-slate-300 space-y-2">
-                    {t.subtopics.map(sub => (
-                      <div key={sub.id} className="flex justify-between items-center text-xs">
-                        <span className="font-body text-slate-700">{sub.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-[10px] text-slate-500">{sub.mastery_score}% Mastery</span>
-                          <Badge 
-                            variant={
-                              sub.status === 'mastered' ? 'success' :
-                              sub.status === 'needs_review' ? 'error' :
-                              sub.status === 'in_progress' ? 'warning' : 'neutral'
-                            }
-                            className="text-[9px]"
-                          >
-                            {sub.status.replace('_', ' ')}
-                          </Badge>
+
+                  {t.subtopics.length > 0 ? (
+                    /* Subtopics Nested list */
+                    <div className="mt-4 pl-4 border-l-2 border-slate-300 space-y-2">
+                      {t.subtopics.map(sub => (
+                        <div key={sub.id} className="flex justify-between items-center text-xs">
+                          <span className="font-body text-slate-700">{sub.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] text-slate-500">{formatPercentage(sub.mastery_score)}% Mastery</span>
+                            <Badge
+                              variant={
+                                sub.status === 'mastered' ? 'success' :
+                                sub.status === 'needs_review' ? 'error' :
+                                sub.status === 'in_progress' ? 'warning' : 'neutral'
+                              }
+                              className="text-[9px]"
+                            >
+                              {sub.status.replace('_', ' ')}
+                            </Badge>
+                          </div>
                         </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* Topic-only learning target: the topic itself is the concept */
+                    <div className="mt-4 pl-4 border-l-2 border-slate-300 flex justify-between items-center text-xs">
+                      <span className="font-body text-slate-700 line-clamp-1">Whole topic learning target</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-slate-500">{formatPercentage(t.mastery_score)}% Mastery</span>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
                 </Card>
               ))}
             </div>

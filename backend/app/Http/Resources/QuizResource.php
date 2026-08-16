@@ -45,20 +45,32 @@ class QuizResource extends JsonResource
         if ($quiz->status === 'completed') {
             $payload['completed_at'] = $quiz->completed_at;
 
-            $subtopicIds = $quiz->questions->pluck('subtopic_id')->unique()->all();
+            $performance = [];
 
-            $topicPerformance = $quiz->questions
-                ->map(fn ($q) => $q->subtopic)
-                ->unique('id')
-                ->map(fn ($subtopic) => [
-                    'subtopic_id' => $subtopic->id,
-                    'subtopic_name' => $subtopic->name,
-                    'mastery_score' => (float) $subtopic->mastery_score,
-                    'status' => $subtopic->status,
-                ])
-                ->all();
+            foreach ($quiz->questions as $question) {
+                if ($question->subtopic_id !== null && $question->subtopic !== null) {
+                    $subtopic = $question->subtopic;
 
-            $payload['topic_performance'] = $topicPerformance;
+                    $performance[$subtopic->id] = [
+                        'subtopic_id' => $subtopic->id,
+                        'subtopic_name' => $subtopic->name,
+                        'mastery_score' => (float) $subtopic->mastery_score,
+                        'status' => $subtopic->status,
+                    ];
+                }
+            }
+
+            // Topic-only quizzes surface the topic itself as the performance entry.
+            if ($performance === [] && $quiz->topic !== null) {
+                $performance[$quiz->topic->id] = [
+                    'topic_id' => $quiz->topic->id,
+                    'topic_name' => $quiz->topic->name,
+                    'mastery_score' => (float) $quiz->topic->mastery_score,
+                    'status' => $quiz->topic->status,
+                ];
+            }
+
+            $payload['topic_performance'] = array_values($performance);
         }
 
         return $payload;

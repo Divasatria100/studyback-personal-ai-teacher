@@ -79,11 +79,15 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('material context', $prompt['user']);
     }
 
-    public function test_quiz_prompt_without_subtopic_reference_marks_none_available(): void
+    public function test_quiz_prompt_without_subtopic_reference_uses_topic_scope(): void
     {
         $prompt = $this->builder->quiz(['material context'], 'easy', 3, []);
 
-        $this->assertStringContainsString('(none available)', $prompt['user']);
+        $this->assertStringContainsString('[CAPABILITY: quiz_generation]', $prompt['system']);
+        $this->assertStringContainsString('Do NOT include a subtopic_id field', $prompt['system']);
+        $this->assertStringContainsString('Scope: the entire topic', $prompt['user']);
+        $this->assertStringNotContainsString('Available subtopics:', $prompt['user']);
+        $this->assertStringContainsString('material context', $prompt['user']);
     }
 
     public function test_evaluate_prompt_embeds_question_answers(): void

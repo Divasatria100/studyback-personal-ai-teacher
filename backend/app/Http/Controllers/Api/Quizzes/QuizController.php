@@ -23,7 +23,7 @@ class QuizController extends Controller
         abort_if($quiz === null, 404);
 
         return new JsonResponse(
-            new QuizResource($quiz->load(['questions.answer', 'questions.subtopic']))
+            new QuizResource($quiz->load(['questions.answer', 'questions.subtopic', 'topic']))
         );
     }
 

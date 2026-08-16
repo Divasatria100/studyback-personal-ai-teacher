@@ -26,6 +26,8 @@ class TopicTreeResource extends JsonResource
             'name' => $topic->name,
             'description' => $topic->description,
             'order_index' => $topic->order_index,
+            'mastery_score' => (float) $topic->mastery_score,
+            'status' => $topic->status,
             'subtopics' => $topic->subtopics->map(
                 fn (Subtopic $subtopic): array => [
                     'id' => $subtopic->id,

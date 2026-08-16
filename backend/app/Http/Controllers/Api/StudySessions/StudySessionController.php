@@ -15,6 +15,8 @@ use App\Services\Quizzes\Exceptions\InsufficientContextException;
 use App\Services\Quizzes\QuizService;
 use App\Services\StudySessions\Exceptions\StudySessionAlreadyCompletedException;
 use App\Services\StudySessions\Exceptions\SubtopicNotInMaterialException;
+use App\Services\StudySessions\Exceptions\TopicHasSubtopicsException;
+use App\Services\StudySessions\Exceptions\TopicNotInMaterialException;
 use App\Services\StudySessions\StudySessionService;
 use Illuminate\Http\JsonResponse;
 
@@ -98,12 +100,17 @@ class StudySessionController extends Controller
         try {
             $result = $this->sessions->explain(
                 session: $session,
-                subtopicId: (int) $request->validated('subtopic_id'),
+                subtopicId: $request->validated('subtopic_id') !== null ? (int) $request->validated('subtopic_id') : null,
+                topicId: $request->validated('topic_id') !== null ? (int) $request->validated('topic_id') : null,
                 intent: $request->validated('intent'),
                 message: $request->validated('message'),
             );
         } catch (SubtopicNotInMaterialException $e) {
             abort(404, $e->getMessage());
+        } catch (TopicNotInMaterialException $e) {
+            abort(404, $e->getMessage());
+        } catch (TopicHasSubtopicsException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return new JsonResponse($result);
@@ -151,7 +158,7 @@ class StudySessionController extends Controller
         }
 
         return new JsonResponse(
-            new QuizResource($quiz->load(['questions.answer', 'questions.subtopic'])),
+            new QuizResource($quiz->load(['questions.answer', 'questions.subtopic', 'topic'])),
             201
         );
     }

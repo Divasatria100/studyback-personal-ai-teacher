@@ -32,7 +32,9 @@ final class PromptBuilder
               }
             ]
 
-            The array must not be empty and at least one topic must have at least one subtopic.
+            The array must not be empty. A topic may have an empty "subtopics" array
+            when the material does not break that topic down further; in that case the
+            topic itself is the learning unit.
             PROMPT,
             'user' => "Identify the main topics and their subtopics from the following material text.\n\nMaterial:\n".$chunkedText,
         ];
@@ -77,11 +79,43 @@ final class PromptBuilder
      */
     public function quiz(array $contextChunks, string $difficulty, int $questionCount, array $subtopicReference): array
     {
+        $topicOnly = $subtopicReference === [];
+
+        if ($topicOnly) {
+            $system = <<<'PROMPT'
+            [CAPABILITY: quiz_generation]
+            You are an AI that writes quiz questions ONLY from the provided material context.
+            Return ONLY valid JSON matching the schema below and nothing else.
+
+            Schema (array of questions):
+            [
+              {
+                "question_type": "multiple_choice" | "true_false" | "short_answer",
+                "question_text": "string",
+                "options": ["string", "string", ...] | null,
+                "correct_answer": "string"
+              }
+            ]
+
+            Rules:
+            - question_type must be one of multiple_choice, true_false, short_answer.
+            - multiple_choice questions MUST include options (at least 2) and correct_answer must be one of the options.
+            - true_false and short_answer questions must set options to null.
+            - Do NOT include a subtopic_id field. This quiz covers the entire topic.
+            PROMPT;
+
+            $user = "Generate {$questionCount} questions with difficulty {$difficulty}.\n\n"
+                ."question_count={$questionCount}\n"
+                ."difficulty={$difficulty}\n\n"
+                ."Scope: the entire topic (no subtopic breakdown).\n\n"
+                ."Material context:\n".implode("\n\n", $contextChunks);
+
+            return ['system' => $system, 'user' => $user];
+        }
+
         $lines = array_map(fn (array $s) => sprintf('id=%d name=%s', $s['id'], $s['name']), $subtopicReference);
 
-        $referenceBlock = $lines === []
-            ? '(none available)'
-            : implode("\n", $lines);
+        $referenceBlock = implode("\n", $lines);
 
         $system = <<<'PROMPT'
         [CAPABILITY: quiz_generation]

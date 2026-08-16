@@ -20,7 +20,19 @@ class Topic extends Model
         'name',
         'description',
         'order_index',
+        'mastery_score',
+        'status',
     ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'mastery_score' => 'float',
+        ];
+    }
 
     /**
      * @return BelongsTo<Model, $this>

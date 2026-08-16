@@ -68,10 +68,12 @@ final class AiOrchestrator implements AiServiceInterface
     {
         ['system' => $system, 'user' => $user] = $this->promptBuilder->quiz($contextChunks, $difficulty, $questionCount, $subtopicReference);
 
+        $subtopicRequired = $subtopicReference !== [];
+
         $questions = $this->generateStructured(
             $system,
             $user,
-            fn (mixed $decoded) => $this->validator->questions($decoded)
+            fn (mixed $decoded) => $this->validator->questions($decoded, $subtopicRequired)
         );
 
         return new QuizGenerationResult($questions);

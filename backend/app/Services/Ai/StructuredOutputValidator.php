@@ -17,6 +17,10 @@ final class StructuredOutputValidator
     /**
      * @return list<array{name: string, description: string|null, subtopics: list<array{name: string, description: string|null}>}>
      *
+     * Topics are allowed to declare an empty "subtopics" array — such a topic is
+     * a topic-only learning target. The material may even have zero subtopics in
+     * total; the topics array itself must still be non-empty.
+     *
      * @throws InvalidStructuredOutputException
      */
     public function topics(mixed $decoded): array
@@ -62,21 +66,17 @@ final class StructuredOutputValidator
             ];
         }
 
-        $totalSubtopics = array_sum(array_map('count', array_column($topics, 'subtopics')));
-
-        if ($totalSubtopics === 0) {
-            throw InvalidStructuredOutputException::forCapability('topic_identification', 'At least one subtopic is required.');
-        }
-
         return $topics;
     }
 
     /**
-     * @return list<array{question_type: string, question_text: string, options: list<string>|null, correct_answer: string, subtopic_id: int}>
+     * @param  bool  $subtopicRequired  when false, subtopic_id is optional and
+     *                                  normalized to null (topic-only quizzes)
+     * @return list<array{question_type: string, question_text: string, options: list<string>|null, correct_answer: string, subtopic_id: int|null}>
      *
      * @throws InvalidStructuredOutputException
      */
-    public function questions(mixed $decoded): array
+    public function questions(mixed $decoded, bool $subtopicRequired = true): array
     {
         if (! is_array($decoded) || $decoded === [] || array_is_list($decoded) === false) {
             throw InvalidStructuredOutputException::forCapability('quiz_generation', 'Expected a non-empty array of questions.');
@@ -109,8 +109,12 @@ final class StructuredOutputValidator
 
             $subtopicId = $item['subtopic_id'] ?? null;
 
-            if (! is_int($subtopicId) || ! is_numeric($subtopicId) || ! filter_var($subtopicId, FILTER_VALIDATE_INT)) {
-                throw InvalidStructuredOutputException::forCapability('quiz_generation', sprintf('Question at index %d has no valid numeric subtopic_id.', $index));
+            if ($subtopicRequired) {
+                if (! is_int($subtopicId) || ! is_numeric($subtopicId) || ! filter_var($subtopicId, FILTER_VALIDATE_INT)) {
+                    throw InvalidStructuredOutputException::forCapability('quiz_generation', sprintf('Question at index %d has no valid numeric subtopic_id.', $index));
+                }
+            } else {
+                $subtopicId = null;
             }
 
             $options = null;
@@ -130,7 +134,7 @@ final class StructuredOutputValidator
                 'question_text' => trim($text),
                 'options' => $options,
                 'correct_answer' => trim($correct),
-                'subtopic_id' => (int) $subtopicId,
+                'subtopic_id' => $subtopicId === null ? null : (int) $subtopicId,
             ];
         }
 

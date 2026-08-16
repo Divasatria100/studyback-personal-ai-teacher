@@ -97,21 +97,27 @@ final class MaterialProcessingService
     private function persist(int $materialId, array $chunks, TopicIdentificationResult $identification): void
     {
         DB::transaction(function () use ($materialId, $chunks, $identification) {
-            [$topicIdBySubtopic, $subtopicFlattened] = $this->persistTopicsAndSubtopics($materialId, $identification);
+            $targets = $this->persistTopicsAndSubtopics($materialId, $identification);
 
-            $this->persistChunks($materialId, $chunks, $subtopicFlattened, $topicIdBySubtopic);
+            $this->persistChunks($materialId, $chunks, $targets);
 
             $this->materials->updateProcessingState($materialId, 'ready');
         });
     }
 
     /**
-     * @return array{0: array<int, int>, 1: list<array{topicId: int, subtopicId: int}>}
+     * Persist topics and subtopics and return the flattened learning targets in
+     * document order. Topics with subtopics contribute one target per subtopic;
+     * topics without subtopics contribute a single topic-only target
+     * (subtopicId = null) so they remain learnable.
+     *
+     * @return list<array{topicId: int, subtopicId: int|null}>
      */
     private function persistTopicsAndSubtopics(int $materialId, TopicIdentificationResult $identification): array
     {
         $topicsData = [];
         $subtopicsData = [];
+        $subtopicCounts = [];
 
         foreach ($identification->topics as $topicIndex => $topic) {
             $topicsData[] = [
@@ -119,6 +125,8 @@ final class MaterialProcessingService
                 'description' => $topic['description'],
                 'order_index' => $topicIndex,
             ];
+
+            $subtopicCounts[$topicIndex] = count($topic['subtopics']);
 
             foreach ($topic['subtopics'] as $subindex => $subtopic) {
                 $subtopicsData[] = [
@@ -130,65 +138,60 @@ final class MaterialProcessingService
             }
         }
 
-        if ($subtopicsData === []) {
-            throw new \RuntimeException('AI returned zero subtopics; the material cannot be marked ready.');
-        }
-
         $createdTopics = $this->topics->bulkCreateForMaterial($materialId, $topicsData);
 
-        $flattenedByOrder = [];
-        $orderIndex = 0;
+        $subtopicOrder = 0;
 
         foreach ($createdTopics as $topicIndex => $topic) {
-            $subtopicCount = count($identification->topics[$topicIndex]['subtopics']);
-
-            for ($i = 0; $i < $subtopicCount; $i++) {
-                $subtopicsData[$orderIndex]['topic_id'] = $topic->id;
-                $flattenedByOrder[$orderIndex] = ['topicId' => $topic->id];
-                $orderIndex++;
+            for ($i = 0; $i < $subtopicCounts[$topicIndex]; $i++) {
+                $subtopicsData[$subtopicOrder]['topic_id'] = $topic->id;
+                $subtopicOrder++;
             }
         }
 
         $createdSubtopics = $this->subtopics->bulkCreate($subtopicsData);
 
-        $topicIdBySubtopic = [];
+        $targets = [];
+        $subtopicOrder = 0;
 
-        foreach ($createdSubtopics as $orderIndex => $subtopic) {
-            $flattenedByOrder[$orderIndex]['subtopicId'] = $subtopic->id;
-            $topicIdBySubtopic[$subtopic->id] = $subtopic->topic_id;
+        foreach ($createdTopics as $topicIndex => $topic) {
+            $count = $subtopicCounts[$topicIndex];
+
+            if ($count === 0) {
+                $targets[] = ['topicId' => $topic->id, 'subtopicId' => null];
+
+                continue;
+            }
+
+            for ($i = 0; $i < $count; $i++) {
+                $targets[] = [
+                    'topicId' => $topic->id,
+                    'subtopicId' => $createdSubtopics[$subtopicOrder]->id,
+                ];
+                $subtopicOrder++;
+            }
         }
 
-        return [$topicIdBySubtopic, array_values($flattenedByOrder)];
+        return $targets;
     }
 
     /**
      * @param  list<string>  $chunks
-     * @param  list<array{topicId: int, subtopicId: int}>  $subtopicFlattened
-     * @param  array<int, int>  $topicIdBySubtopic
+     * @param  list<array{topicId: int, subtopicId: int|null}>  $targets
      */
-    private function persistChunks(
-        int $materialId,
-        array $chunks,
-        array $subtopicFlattened,
-        array $topicIdBySubtopic
-    ): void {
-        $assignments = $this->assigner->assign($subtopicFlattened, count($chunks));
+    private function persistChunks(int $materialId, array $chunks, array $targets): void
+    {
+        $assignments = $this->assigner->assign($targets, count($chunks));
 
         $rows = [];
 
         foreach ($chunks as $chunkIndex => $content) {
-            $subtopicId = $assignments[$chunkIndex];
-
-            $topicId = $topicIdBySubtopic[$subtopicId] ?? null;
-
-            if ($topicId === null) {
-                throw new \RuntimeException('Unable to map a chunk to a topic.');
-            }
+            $assignment = $assignments[$chunkIndex];
 
             $rows[] = [
                 'material_id' => $materialId,
-                'topic_id' => $topicId,
-                'subtopic_id' => $subtopicId,
+                'topic_id' => $assignment['topicId'],
+                'subtopic_id' => $assignment['subtopicId'],
                 'content' => $content,
                 'chunk_index' => $chunkIndex,
             ];

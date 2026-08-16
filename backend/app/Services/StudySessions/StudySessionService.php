@@ -6,9 +6,12 @@ use App\Models\StudySession;
 use App\Repositories\Contracts\ChunkRepositoryInterface;
 use App\Repositories\Contracts\StudySessionRepositoryInterface;
 use App\Repositories\Contracts\SubtopicRepositoryInterface;
+use App\Repositories\Contracts\TopicRepositoryInterface;
 use App\Services\Ai\Contracts\AiServiceInterface;
 use App\Services\StudySessions\Exceptions\StudySessionAlreadyCompletedException;
 use App\Services\StudySessions\Exceptions\SubtopicNotInMaterialException;
+use App\Services\StudySessions\Exceptions\TopicHasSubtopicsException;
+use App\Services\StudySessions\Exceptions\TopicNotInMaterialException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +25,7 @@ final class StudySessionService
     public function __construct(
         private readonly StudySessionRepositoryInterface $studySessions,
         private readonly SubtopicRepositoryInterface $subtopics,
+        private readonly TopicRepositoryInterface $topics,
         private readonly ChunkRepositoryInterface $chunks,
         private readonly AiServiceInterface $ai,
     ) {}
@@ -76,27 +80,48 @@ final class StudySessionService
     }
 
     /**
-     * Generate a grounded explanation for a topic/subtopic (API Design §14.2).
+     * Generate a grounded explanation for a learning target (API Design §14.2).
+     * The target is either a subtopic (subtopicId) or a topic without subtopics
+     * (topicId). Topics that own subtopics are not valid topic-only targets.
      *
-     * @param  array{int}  $scopes  topic/subtopic scope applied during retrieval
-     * @return array{subtopic_id: int, explanation: string}
+     * @return array{subtopic_id?: int, topic_id: int, explanation: string}
      */
-    public function explain(StudySession $session, int $subtopicId, string $intent, ?string $message): array
+    public function explain(StudySession $session, ?int $subtopicId, ?int $topicId, string $intent, ?string $message): array
     {
-        $subtopic = $this->subtopics->findBelongsToMaterial($session->material_id, $subtopicId);
+        if ($subtopicId !== null) {
+            $subtopic = $this->subtopics->findBelongsToMaterial($session->material_id, $subtopicId);
 
-        if ($subtopic === null) {
-            throw new SubtopicNotInMaterialException;
+            if ($subtopic === null) {
+                throw new SubtopicNotInMaterialException;
+            }
+
+            $context = $this->chunks->retrieveContext(
+                $session->material_id,
+                $subtopic->topic_id,
+                $subtopicId
+            );
+
+            return [
+                'subtopic_id' => $subtopicId,
+                'topic_id' => $subtopic->topic_id,
+                'explanation' => $this->ai->explain($context, $intent, $message),
+            ];
         }
 
-        $context = $this->chunks->retrieveContext(
-            $session->material_id,
-            $subtopic->topic_id,
-            $subtopicId
-        );
+        $topic = $this->topics->findInMaterial($session->material_id, $topicId);
+
+        if ($topic === null) {
+            throw new TopicNotInMaterialException;
+        }
+
+        if ($topic->subtopics()->exists()) {
+            throw new TopicHasSubtopicsException;
+        }
+
+        $context = $this->chunks->retrieveContext($session->material_id, $topicId, null);
 
         return [
-            'subtopic_id' => $subtopicId,
+            'topic_id' => $topicId,
             'explanation' => $this->ai->explain($context, $intent, $message),
         ];
     }

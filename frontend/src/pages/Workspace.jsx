@@ -33,7 +33,9 @@ export default function Workspace() {
 
   // Layout & Sidebar
   const [expandedTopics, setExpandedTopics] = useState([]);
-  const [selectedSubtopicId, setSelectedSubtopicId] = useState(null);
+  // activeTarget: { type: 'subtopic', id } | { type: 'topic', id } — topic
+  // targets are only used for topics WITHOUT subtopics (topic-only targets).
+  const [activeTarget, setActiveTarget] = useState(null);
 
   // Teach Me mode state
   const [teachChat, setTeachChat] = useState([]);
@@ -67,12 +69,17 @@ export default function Workspace() {
       const top = await materialService.getTopics(sess.material_id);
       setTopicsData(top);
       
-      // Auto expand first topic
-      if (top && top.topics.length > 0) {
-        setExpandedTopics([top.topics[0].id]);
-        // Auto select first subtopic
-        if (top.topics[0].subtopics.length > 0 && !selectedSubtopicId) {
-          setSelectedSubtopicId(top.topics[0].subtopics[0].id);
+      // Auto expand first topic and auto select the first learning target.
+      // Topics with subtopics default to their first subtopic; topics without
+      // subtopics are themselves the target.
+      if (top && top.topics.length > 0 && !activeTarget) {
+        const first = top.topics[0];
+
+        if (first.subtopics.length > 0) {
+          setExpandedTopics([first.id]);
+          setActiveTarget({ type: 'subtopic', id: first.subtopics[0].id });
+        } else {
+          setActiveTarget({ type: 'topic', id: first.id });
         }
       }
     } catch (err) {
@@ -92,37 +99,49 @@ export default function Workspace() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [teachChat, isTeachGenerating]);
 
-  // Handle subtopic sidebar click
-  const handleSubtopicClick = async (subtopicId) => {
-    setSelectedSubtopicId(subtopicId);
-    
+  // Select a learning target and start the matching activity for the session mode.
+  const selectTarget = async (target) => {
+    setActiveTarget(target);
+
     // Reset views
     setTeachChat([]);
     setCurrentQuiz(null);
     setQuizAnswerVerdict(null);
     setSelectedAnswerOption('');
-    
+
     if (session.mode === 'teach_me') {
-      triggerExplanation(subtopicId, 'explain');
+      triggerExplanation(target, 'explain');
     } else if (session.mode === 'review_weak_topics') {
-      triggerExplanation(subtopicId, 'review');
+      triggerExplanation(target, 'review');
     } else if (session.mode === 'quiz_me') {
-      triggerQuizStart(subtopicId);
+      triggerQuizStart(target);
     } else if (session.mode === 'guided_study_session') {
       setGuidedStage(0);
-      triggerExplanation(subtopicId, 'explain');
+      triggerExplanation(target, 'explain');
     }
   };
 
+  // Sidebar click: expandable topics toggle; topic-only topics are leaf targets.
+  const handleTopicClick = (topic) => {
+    if (topic.subtopics.length > 0) {
+      toggleTopicExpand(topic.id);
+      return;
+    }
+
+    selectTarget({ type: 'topic', id: topic.id });
+  };
+
   // Trigger conversational explanation
-  const triggerExplanation = async (subtopicId, intent, userMessage = '') => {
+  const triggerExplanation = async (target, intent, userMessage = '') => {
+    if (!target) return;
+
     setIsTeachGenerating(true);
     if (userMessage) {
       setTeachChat(prev => [...prev, { sender: 'user', text: userMessage }]);
     }
-    
+
     try {
-      const res = await studySessionService.getExplanation(session.id, subtopicId, intent, userMessage);
+      const res = await studySessionService.getExplanation(session.id, target, intent, userMessage);
       setTeachChat(prev => [...prev, { sender: 'ai', text: res.explanation }]);
     } catch (err) {
       addToast('Failed to generate explanation', 'error');
@@ -131,15 +150,24 @@ export default function Workspace() {
     }
   };
 
-  // Trigger quiz starting
-  const triggerQuizStart = async (subtopicId) => {
+  // Trigger quiz starting. Subtopic targets resolve their parent topic;
+  // topic-only targets quiz the whole topic (no subtopic scope).
+  const triggerQuizStart = async (target) => {
+    if (!target) return;
+
     setIsGeneratingQuiz(true);
     try {
-      // Find parent topic
-      let topicId = null;
-      topicsData.topics.forEach(t => {
-        if (t.subtopics.find(s => s.id === subtopicId)) topicId = t.id;
-      });
+      let topicId;
+      let subtopicId;
+
+      if (target.type === 'topic') {
+        topicId = target.id;
+        subtopicId = undefined;
+      } else {
+        const t = topicsData.topics.find(t => t.subtopics.find(s => s.id === target.id));
+        topicId = t?.id;
+        subtopicId = target.id;
+      }
 
       const quiz = await quizService.create(session.id, topicId, subtopicId, session.difficulty, 3);
       setCurrentQuiz(quiz);
@@ -248,12 +276,12 @@ export default function Workspace() {
   // Guided flow transitions
   const startGuidedTest = () => {
     setGuidedStage(1);
-    triggerQuizStart(selectedSubtopicId);
+    triggerQuizStart(activeTarget);
   };
 
   const startGuidedReview = () => {
     setGuidedStage(3);
-    triggerExplanation(selectedSubtopicId, 'review');
+    triggerExplanation(activeTarget, 'review');
   };
 
   if (isLoading) {
@@ -264,12 +292,31 @@ export default function Workspace() {
     );
   }
 
-  // Find active subtopic label and status
-  let activeSubtopic = null;
-  topicsData?.topics.forEach(t => {
-    const s = t.subtopics.find(sub => sub.id === selectedSubtopicId);
-    if (s) activeSubtopic = s;
-  });
+  // Resolve the active learning target's label and progress from the topic tree.
+  let activeConcept = null;
+  if (activeTarget?.type === 'subtopic') {
+    topicsData?.topics.forEach(t => {
+      const s = t.subtopics.find(sub => sub.id === activeTarget.id);
+      if (s) {
+        activeConcept = {
+          name: s.name,
+          description: s.description,
+          mastery_score: s.mastery_score,
+          status: s.status,
+        };
+      }
+    });
+  } else if (activeTarget?.type === 'topic') {
+    const t = topicsData?.topics.find(topic => topic.id === activeTarget.id);
+    if (t) {
+      activeConcept = {
+        name: t.name,
+        description: t.description,
+        mastery_score: t.mastery_score,
+        status: t.status,
+      };
+    }
+  }
 
   // Quiz phase / completion gates used by the CHECK UNDERSTANDING renderer.
   // Splitting the "phase" from "quiz exists" ensures the loading/error states
@@ -332,42 +379,59 @@ export default function Workspace() {
           <div className="space-y-2">
             <h3 className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Learning Map</h3>
             <div className="space-y-2">
-              {topicsData?.topics.map((t) => (
-                <div key={t.id} className="space-y-1">
-                  <button 
-                    onClick={() => toggleTopicExpand(t.id)}
-                    className="w-full flex items-center justify-between p-2 hover:bg-white/20 text-left"
-                    style={{ borderRadius: 'var(--radius-control)' }}
-                  >
-                    <span className="font-display font-semibold text-xs text-slate-900 line-clamp-1">
-                      {t.name}
-                    </span>
-                    {expandedTopics.includes(t.id) ? <ChevronDown className="h-3 w-3 text-slate-500" /> : <ChevronRight className="h-3 w-3 text-slate-500" />}
-                  </button>
+              {topicsData?.topics.map((t) => {
+                const isExpandable = t.subtopics.length > 0;
+                const isExpanded = expandedTopics.includes(t.id);
+                const isActiveTopicTarget = activeTarget?.type === 'topic' && activeTarget.id === t.id;
 
-                  {expandedTopics.includes(t.id) && (
-                    <div className="pl-3 border-l border-slate-300/60 space-y-1 mt-1">
-                      {t.subtopics.map(sub => (
-                        <button
-                          key={sub.id}
-                          onClick={() => handleSubtopicClick(sub.id)}
-                          className={`w-full flex items-center justify-between p-1.5 text-left text-xs transition-colors ${
-                            selectedSubtopicId === sub.id 
-                              ? 'bg-slate-900/10 text-slate-900 font-bold border-r-2 border-slate-900' 
-                              : 'text-slate-600 hover:text-slate-900 hover:bg-white/10'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 truncate">
-                            {sidebarStatusIcon(sub.status)}
-                            <span className="truncate">{sub.name}</span>
-                          </div>
-                          <span className="font-mono text-[9px] text-slate-500">{sub.mastery_score}%</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                return (
+                  <div key={t.id} className="space-y-1">
+                    <button
+                      onClick={() => handleTopicClick(t)}
+                      aria-expanded={isExpandable ? isExpanded : undefined}
+                      className={`w-full flex items-center justify-between p-2 hover:bg-white/20 text-left ${
+                        isActiveTopicTarget ? 'bg-slate-900/10 text-slate-900 font-bold border-r-2 border-slate-900' : ''
+                      }`}
+                      style={{ borderRadius: 'var(--radius-control)' }}
+                    >
+                      <span className="font-display font-semibold text-xs text-slate-900 line-clamp-1">
+                        {t.name}
+                      </span>
+
+                      {isExpandable ? (
+                        isExpanded ? <ChevronDown className="h-3 w-3 text-slate-500" /> : <ChevronRight className="h-3 w-3 text-slate-500" />
+                      ) : (
+                        <span className="flex items-center gap-1.5">
+                          {sidebarStatusIcon(t.status)}
+                          <span className="font-mono text-[9px] text-slate-500">{formatPercentage(t.mastery_score)}%</span>
+                        </span>
+                      )}
+                    </button>
+
+                    {isExpandable && isExpanded && (
+                      <div className="pl-3 border-l border-slate-300/60 space-y-1 mt-1">
+                        {t.subtopics.map(sub => (
+                          <button
+                            key={sub.id}
+                            onClick={() => selectTarget({ type: 'subtopic', id: sub.id })}
+                            className={`w-full flex items-center justify-between p-1.5 text-left text-xs transition-colors ${
+                              activeTarget?.type === 'subtopic' && activeTarget.id === sub.id
+                                ? 'bg-slate-900/10 text-slate-900 font-bold border-r-2 border-slate-900'
+                                : 'text-slate-600 hover:text-slate-900 hover:bg-white/10'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              {sidebarStatusIcon(sub.status)}
+                              <span className="truncate">{sub.name}</span>
+                            </div>
+                            <span className="font-mono text-[9px] text-slate-500">{formatPercentage(sub.mastery_score)}%</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -381,30 +445,30 @@ export default function Workspace() {
 
       {/* 2. Right Workspace Learning Pane (3 Columns) */}
       <div className="lg:col-span-3 flex flex-col h-full space-y-4">
-        {/* Active Subtopic Header */}
+        {/* Active Concept Header */}
         <Card glass className="p-4 border-slate-900/10 flex items-center justify-between">
           <div>
             <span className="font-mono text-[9px] text-slate-500 uppercase tracking-wider">Active Concept</span>
             <h1 className="text-xl font-bold font-display text-slate-900 leading-tight">
-              {activeSubtopic ? activeSubtopic.name : 'Select a subtopic'}
+              {activeConcept ? activeConcept.name : 'Select a concept'}
             </h1>
             <p className="text-xs text-slate-600 font-body line-clamp-1">
-              {activeSubtopic ? activeSubtopic.description : ''}
+              {activeConcept ? activeConcept.description : ''}
             </p>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="text-right">
               <span className="block font-mono text-[9px] text-slate-500 uppercase tracking-wider">Current Mastery</span>
-              <span className="font-mono text-xs font-bold text-slate-900">{activeSubtopic ? activeSubtopic.mastery_score : 0}%</span>
+              <span className="font-mono text-xs font-bold text-slate-900">{activeConcept ? formatPercentage(activeConcept.mastery_score) : 0}%</span>
             </div>
-            {activeSubtopic && (
+            {activeConcept && (
               <Badge variant={
-                activeSubtopic.status === 'mastered' ? 'success' :
-                activeSubtopic.status === 'needs_review' ? 'error' :
-                activeSubtopic.status === 'in_progress' ? 'warning' : 'neutral'
+                activeConcept.status === 'mastered' ? 'success' :
+                activeConcept.status === 'needs_review' ? 'error' :
+                activeConcept.status === 'in_progress' ? 'warning' : 'neutral'
               }>
-                {activeSubtopic.status.replace('_', ' ')}
+                {activeConcept.status.replace('_', ' ')}
               </Badge>
             )}
           </div>
@@ -442,7 +506,7 @@ export default function Workspace() {
                 {teachChat.length === 0 && !isTeachGenerating ? (
                   <div className="text-center py-12 text-slate-500 font-body">
                     <MessageSquare className="h-10 w-10 mx-auto mb-2 text-slate-400" />
-                    Click a subtopic in the sidebar learning map to load the initial analysis context.
+                    Click a concept in the sidebar learning map to load the initial analysis context.
                   </div>
                 ) : (
                   teachChat.map((msg, i) => (
@@ -488,14 +552,14 @@ export default function Workspace() {
                 {teachChat.length > 0 && !isTeachGenerating && (
                   <div className="flex flex-wrap gap-2">
                     <button 
-                      onClick={() => triggerExplanation(selectedSubtopicId, 'simplify')}
+                      onClick={() => triggerExplanation(activeTarget, 'simplify')}
                       className="h-8 px-3 border border-slate-350 hover:bg-slate-100 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-800"
                       style={{ borderRadius: 'var(--radius-control)' }}
                     >
                       <Lightbulb className="h-3.5 w-3.5 inline mr-1 text-amber-500" /> Explain Simpler
                     </button>
                     <button 
-                      onClick={() => triggerExplanation(selectedSubtopicId, 'example')}
+                      onClick={() => triggerExplanation(activeTarget, 'example')}
                       className="h-8 px-3 border border-slate-350 hover:bg-slate-100 font-mono text-[10px] font-semibold uppercase tracking-wider text-slate-800"
                       style={{ borderRadius: 'var(--radius-control)' }}
                     >
@@ -519,7 +583,7 @@ export default function Workspace() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!teachInput.trim()) return;
-                    triggerExplanation(selectedSubtopicId, 'explain', teachInput);
+                    triggerExplanation(activeTarget, 'explain', teachInput);
                     setTeachInput('');
                   }}
                   className="flex gap-2 items-center"
@@ -562,14 +626,14 @@ export default function Workspace() {
                   <p className="font-body text-sm text-slate-700">
                     We couldn't prepare the questions. Please try again.
                   </p>
-                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                  <Button variant="primary" onClick={() => triggerQuizStart(activeTarget)}>
                     Retry
                   </Button>
                 </div>
               ) : currentQuiz.questions.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center py-12 space-y-4 text-center">
                   <p className="font-body text-sm text-slate-500">No questions could be generated.</p>
-                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                  <Button variant="primary" onClick={() => triggerQuizStart(activeTarget)}>
                     Retry
                   </Button>
                 </div>
@@ -680,7 +744,7 @@ export default function Workspace() {
                   <p className="font-body text-sm text-slate-700">
                     Question not available. Please try again.
                   </p>
-                  <Button variant="primary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                  <Button variant="primary" onClick={() => triggerQuizStart(activeTarget)}>
                     Retry
                   </Button>
                 </div>
@@ -736,8 +800,8 @@ export default function Workspace() {
                   <span className="block font-mono text-[9px] text-slate-500 uppercase tracking-wider text-center">Topic Performance</span>
                   <div className="border border-slate-350 bg-white/40 p-3 space-y-2" style={{ borderRadius: 'var(--radius-control)' }}>
                     {currentQuiz.topic_performance.map(perf => (
-                      <div key={perf.subtopic_id} className="flex justify-between items-center text-xs">
-                        <span className="font-body text-slate-800">{perf.subtopic_name}</span>
+                      <div key={perf.subtopic_id ?? perf.topic_id} className="flex justify-between items-center text-xs">
+                        <span className="font-body text-slate-800">{perf.subtopic_name ?? perf.topic_name}</span>
                         <div className="flex gap-2">
                           <span className="font-mono text-slate-500">{perf.mastery_score}%</span>
                           <Badge variant={perf.status === 'mastered' ? 'success' : perf.status === 'needs_review' ? 'error' : 'warning'}>
@@ -763,7 +827,7 @@ export default function Workspace() {
                   </>
                 ) : (
                   <>
-                    <Button variant="secondary" onClick={() => triggerQuizStart(selectedSubtopicId)}>
+                    <Button variant="secondary" onClick={() => triggerQuizStart(activeTarget)}>
                       Try Quiz Again
                     </Button>
                     <Button variant="primary" onClick={handleCompleteSession}>
@@ -775,13 +839,13 @@ export default function Workspace() {
             </div>
           )}
 
-          {/* Fallback starting empty state if no subtopic active */}
-          {!selectedSubtopicId && (
+{/* Fallback starting empty state if no concept active */}
+          {!activeTarget && (
             <div className="text-center py-16 space-y-4">
               <GraduationCap className="h-16 w-16 text-slate-400 mx-auto" />
-              <h3 className="text-xl font-bold font-display text-slate-900">Select a subtopic to study</h3>
+              <h3 className="text-xl font-bold font-display text-slate-900">Select a concept to study</h3>
               <p className="text-sm text-slate-650 font-body max-w-sm mx-auto">
-                Explore the learning tree outline on the left menu, select any concept subtopic to get personalized tutoring or quizzes!
+                Explore the learning tree outline on the left menu, select any concept to get personalized tutoring or quizzes!
               </p>
             </div>
           )}

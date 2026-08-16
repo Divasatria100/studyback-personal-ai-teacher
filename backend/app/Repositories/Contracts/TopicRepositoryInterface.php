@@ -31,4 +31,12 @@ interface TopicRepositoryInterface
      * @return list<int>
      */
     public function existingIdsInMaterial(int $materialId, array $topicIds): array;
+
+    /**
+     * Recompute a topic-only target's mastery as the cumulative average of every
+     * answer ever recorded for it (topic-scoped quiz questions with a NULL
+     * subtopic_id), derive the learning status from the fixed thresholds, and
+     * persist both. Returns the updated topic.
+     */
+    public function recalculateMastery(int $topicId): Topic;
 }

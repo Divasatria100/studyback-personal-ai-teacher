@@ -9,6 +9,7 @@ use App\Repositories\Contracts\ChunkRepositoryInterface;
 use App\Repositories\Contracts\QuizAnswerRepositoryInterface;
 use App\Repositories\Contracts\QuizRepositoryInterface;
 use App\Repositories\Contracts\SubtopicRepositoryInterface;
+use App\Repositories\Contracts\TopicRepositoryInterface;
 use App\Services\Ai\Contracts\AiServiceInterface;
 use App\Services\Quizzes\Exceptions\InsufficientContextException;
 use App\Services\Quizzes\Exceptions\QuizAnswerConflictException;
@@ -26,6 +27,7 @@ final class QuizService
         private readonly QuizRepositoryInterface $quizzes,
         private readonly QuizAnswerRepositoryInterface $answers,
         private readonly SubtopicRepositoryInterface $subtopics,
+        private readonly TopicRepositoryInterface $topics,
         private readonly ChunkRepositoryInterface $chunks,
         private readonly AiServiceInterface $ai,
     ) {}
@@ -42,6 +44,11 @@ final class QuizService
 
     /**
      * Generate a quiz for the session's topic scope (API Design §12).
+     *
+     * When the topic has subtopics, $subtopicReference is non-empty and every
+     * question targets a subtopic. When the topic has no subtopics (topic-only
+     * learning target), $subtopicReference is empty and questions carry a NULL
+     * subtopic_id scoped to the whole topic.
      *
      * @param  int  $subtopicId  nullable subtopic scope; when present, must belong to $topicId
      * @param  list<array{id: int, name: string}>  $subtopicReference  subtopics available in the topic scope
@@ -154,7 +161,12 @@ final class QuizService
                 'answered_at' => Carbon::now(),
             ]);
 
-            $subtopic = $this->subtopics->recalculateMastery($question->subtopic_id);
+            if ($question->subtopic_id !== null) {
+                $subtopic = $this->subtopics->recalculateMastery($question->subtopic_id);
+            } else {
+                $subtopic = null;
+                $this->topics->recalculateMastery($quiz->topic_id);
+            }
 
             $answeredCount = $this->quizzes->answeredCount($quiz);
 
@@ -169,16 +181,33 @@ final class QuizService
             return $subtopic;
         });
 
+        if ($subtopic !== null) {
+            return [
+                'quiz_question_id' => $question->id,
+                'submitted_answer' => $submittedAnswer,
+                'is_correct' => $evaluation->isCorrect,
+                'ai_feedback' => $evaluation->feedback,
+                'quiz_status' => $this->isComplete($quiz) ? 'completed' : 'in_progress',
+                'subtopic' => [
+                    'id' => $subtopic->id,
+                    'mastery_score' => (float) $subtopic->mastery_score,
+                    'status' => $subtopic->status,
+                ],
+            ];
+        }
+
+        $topic = $this->topics->findById($quiz->topic_id);
+
         return [
             'quiz_question_id' => $question->id,
             'submitted_answer' => $submittedAnswer,
             'is_correct' => $evaluation->isCorrect,
             'ai_feedback' => $evaluation->feedback,
             'quiz_status' => $this->isComplete($quiz) ? 'completed' : 'in_progress',
-            'subtopic' => [
-                'id' => $subtopic->id,
-                'mastery_score' => (float) $subtopic->mastery_score,
-                'status' => $subtopic->status,
+            'topic' => [
+                'id' => $topic->id,
+                'mastery_score' => (float) $topic->mastery_score,
+                'status' => $topic->status,
             ],
         ];
     }
@@ -186,10 +215,12 @@ final class QuizService
     /**
      * Laravel-level business validation of AI-generated questions (§10.2):
      * question count, supported types, and subtopic ownership within $topicId.
+     * When the topic has no subtopics ($validSubtopicIds empty), ownership is
+     * trivially satisfied and questions carry a NULL subtopic_id.
      *
-     * @param  list<array{question_type: string, question_text: string, options: array|null, correct_answer: string, subtopic_id: int}>  $questions
+     * @param  list<array{question_type: string, question_text: string, options: array|null, correct_answer: string, subtopic_id: int|null}>  $questions
      * @param  list<int>  $validSubtopicIds
-     * @return list<array{question_type: string, question_text: string, options: array|null, correct_answer: string, subtopic_id: int}>
+     * @return list<array{question_type: string, question_text: string, options: array|null, correct_answer: string, subtopic_id: int|null}>
      *
      * @throws InsufficientContextException when the AI references an invalid subtopic
      */

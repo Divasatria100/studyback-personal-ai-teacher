@@ -67,10 +67,15 @@ class EloquentMaterialRepository implements MaterialRepositoryInterface
             return [];
         }
 
-        $rows = DB::table('subtopics')
-            ->join('topics', 'topics.id', '=', 'subtopics.topic_id')
+        // Average mastery across every learning target: each subtopic of a
+        // topic-with-subtopics, plus each topic-only topic's own mastery_score.
+        $rows = DB::table('topics')
+            ->leftJoin('subtopics', 'subtopics.topic_id', '=', 'topics.id')
             ->whereIn('topics.material_id', $materialIds)
-            ->selectRaw('topics.material_id, AVG(subtopics.mastery_score) AS mastery')
+            ->selectRaw(
+                'topics.material_id, '
+                .'AVG(CASE WHEN subtopics.id IS NOT NULL THEN subtopics.mastery_score ELSE topics.mastery_score END) AS mastery'
+            )
             ->groupBy('topics.material_id')
             ->get();
 

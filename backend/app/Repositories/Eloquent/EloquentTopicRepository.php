@@ -5,6 +5,7 @@ namespace App\Repositories\Eloquent;
 use App\Models\Topic;
 use App\Repositories\Contracts\TopicRepositoryInterface;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\DB;
 
 class EloquentTopicRepository implements TopicRepositoryInterface
 {
@@ -57,5 +58,32 @@ class EloquentTopicRepository implements TopicRepositoryInterface
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->all();
+    }
+
+    public function recalculateMastery(int $topicId): Topic
+    {
+        $average = DB::table('quiz_answers')
+            ->join('quiz_questions', 'quiz_questions.id', '=', 'quiz_answers.quiz_question_id')
+            ->join('quizzes', 'quizzes.id', '=', 'quiz_questions.quiz_id')
+            ->where('quizzes.topic_id', $topicId)
+            ->whereNull('quiz_questions.subtopic_id')
+            ->selectRaw('AVG(CASE WHEN quiz_answers.is_correct THEN 100 ELSE 0 END) AS mastery')
+            ->value('mastery');
+
+        $mastery = round((float) $average, 2);
+
+        $status = match (true) {
+            $mastery >= 80 => 'mastered',
+            $mastery >= 60 => 'in_progress',
+            default => 'needs_review',
+        };
+
+        $topic = Topic::query()->findOrFail($topicId);
+        $topic->forceFill([
+            'mastery_score' => $mastery,
+            'status' => $status,
+        ])->save();
+
+        return $topic->refresh();
     }
 }

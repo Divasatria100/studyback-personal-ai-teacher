@@ -6,9 +6,10 @@ use App\Services\Processing\ChunkSubtopicAssigner;
 use Tests\TestCase;
 
 /**
- * Deterministic positional tagging of chunks to AI-identified subtopics
+ * Deterministic positional tagging of chunks to AI-identified learning targets
  * (AI Architecture §5) — runs entirely in Laravel, never depends on extra
- * per-chunk AI classification.
+ * per-chunk AI classification. A target is a subtopic (subtopicId set) or a
+ * topic-only topic (subtopicId null).
  */
 class ChunkSubtopicAssignerTest extends TestCase
 {
@@ -21,9 +22,11 @@ class ChunkSubtopicAssignerTest extends TestCase
         $this->assigner = new ChunkSubtopicAssigner;
     }
 
-    public function test_no_subtopics_assigns_null_to_each_chunk(): void
+    public function test_empty_targets_throws(): void
     {
-        $this->assertSame([null, null, null], $this->assigner->assign([], 3));
+        $this->expectException(\InvalidArgumentException::class);
+
+        $this->assigner->assign([], 3);
     }
 
     public function test_zero_chunks_returns_empty_list(): void
@@ -35,32 +38,63 @@ class ChunkSubtopicAssignerTest extends TestCase
     {
         $assignment = $this->assigner->assign([['topicId' => 1, 'subtopicId' => 5]], 4);
 
-        $this->assertSame([5, 5, 5, 5], $assignment);
+        $this->assertSame([
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+        ], $assignment);
     }
 
-    public function test_subtopics_are_distributed_across_document(): void
+    public function test_topic_only_target_assigns_all_chunks_with_null_subtopic(): void
     {
-        $subtopics = [
+        $assignment = $this->assigner->assign([['topicId' => 2, 'subtopicId' => null]], 3);
+
+        $this->assertSame([
+            ['topicId' => 2, 'subtopicId' => null],
+            ['topicId' => 2, 'subtopicId' => null],
+            ['topicId' => 2, 'subtopicId' => null],
+        ], $assignment);
+    }
+
+    public function test_targets_are_distributed_across_document(): void
+    {
+        $targets = [
             ['topicId' => 1, 'subtopicId' => 5],
             ['topicId' => 1, 'subtopicId' => 6],
-            ['topicId' => 2, 'subtopicId' => 7],
+            ['topicId' => 2, 'subtopicId' => null],
         ];
 
-        $assignment = $this->assigner->assign($subtopics, 9);
+        $assignment = $this->assigner->assign($targets, 9);
 
-        $this->assertSame([5, 5, 5, 6, 6, 6, 7, 7, 7], $assignment);
+        $this->assertSame([
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 6],
+            ['topicId' => 1, 'subtopicId' => 6],
+            ['topicId' => 1, 'subtopicId' => 6],
+            ['topicId' => 2, 'subtopicId' => null],
+            ['topicId' => 2, 'subtopicId' => null],
+            ['topicId' => 2, 'subtopicId' => null],
+        ], $assignment);
     }
 
-    public function test_uneven_chunk_count_reaches_every_subtopic(): void
+    public function test_uneven_chunk_count_reaches_every_target(): void
     {
-        $subtopics = [
+        $targets = [
             ['topicId' => 1, 'subtopicId' => 5],
-            ['topicId' => 2, 'subtopicId' => 6],
+            ['topicId' => 2, 'subtopicId' => null],
         ];
 
-        $assignment = $this->assigner->assign($subtopics, 5);
+        $assignment = $this->assigner->assign($targets, 5);
 
-        $this->assertSame([5, 5, 5, 6, 6], $assignment);
-        $this->assertEqualsCanonicalizing([5, 6], array_unique($assignment));
+        $this->assertSame([
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 1, 'subtopicId' => 5],
+            ['topicId' => 2, 'subtopicId' => null],
+            ['topicId' => 2, 'subtopicId' => null],
+        ], $assignment);
     }
 }
