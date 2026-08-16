@@ -19,72 +19,72 @@
 
 **Status:** Final, implementation-ready
 **Source of truth:** Studyback System Architecture Blueprint · Studyback Database Design Document (Final) · Studyback API Design Document (Final) · Studyback Tech Stack Specification (Final — provider-agnostic AI stack)
-**AI Service:** `ai_service` — in-process Laravel service (bukan microservice/container)
-**AI Architecture:** provider-agnostic **LLM Provider Abstraction** di dalam `ai_service`
-**Default AI Provider:** OpenRouter — route default `openrouter/free` (free-model router, bukan model tunggal)
-**Optional AI Provider:** Featherless.ai (hackathon partner, digunakan bila dikonfigurasi & inference credits tersedia)
+**AI Service:** `ai_service` — in-process Laravel service (not a microservice/container)
+**AI Architecture:** provider-agnostic **LLM Provider Abstraction** inside `ai_service`
+**Default AI Provider:** OpenRouter — default route `openrouter/free` (free-model router, not a single model)
+**Optional AI Provider:** Featherless.ai (hackathon partner, used when configured & inference credits are available)
 **Development/Test AI Provider:** Mock AI Provider
-**Model Strategy:** tidak ada primary/fallback model yang di-hardcode; `gpt-oss-20b` dan `Nemotron 3 Nano 30B A3B` adalah OPTIONAL pinned-model candidates, bukan dependency arsitektur permanen
-**Retrieval:** PostgreSQL filter-based (`material_id` + `topic_id`/`subtopic_id`), tanpa vector database/embedding
+**Model Strategy:** no hard-coded primary/fallback model; `gpt-oss-20b` and `Nemotron 3 Nano 30B A3B` are OPTIONAL pinned-model candidates, not a permanent architectural dependency
+**Retrieval:** PostgreSQL filter-based (`material_id` + `topic_id`/`subtopic_id`), no vector database/embedding
 **Scope:** 48-hour hackathon MVP
 
 ---
 
 ## 1. AI Architecture Overview
 
-### Role AI dalam Studyback
+### AI's Role in Studyback
 
-AI di Studyback hanya bertugas melakukan **reasoning tasks** — bukan menyimpan state, bukan mengambil keputusan final atas data aplikasi. Sesuai Architecture Blueprint §6 dan §12, AI ("AI Orchestrator" di level blueprint, diimplementasikan sebagai `ai_service` di level Laravel) melakukan empat hal saja:
+AI in Studyback is only responsible for **reasoning tasks** — it does not store state, and does not make final decisions over application data. Per Architecture Blueprint §6 and §12, AI (the "AI Orchestrator" at the blueprint level, implemented as `ai_service` at the Laravel level) performs only four things:
 
-1. Mengidentifikasi topic/subtopic dari material yang diupload.
-2. Menjelaskan konsep (Teach Me / Review).
-3. Menghasilkan pertanyaan quiz terstruktur.
-4. Mengevaluasi jawaban user terhadap kunci jawaban.
+1. Identifying topics/subtopics from an uploaded material.
+2. Explaining concepts (Teach Me / Review).
+3. Generating structured quiz questions.
+4. Evaluating a user's answer against the answer key.
 
-Semua hasil AI di atas adalah **judgment terstruktur atau teks percakapan** yang dikembalikan ke Application Module pemanggil. AI tidak pernah menentukan apakah sebuah subtopic "dikuasai" (mastered), tidak pernah menulis ke PostgreSQL, dan tidak pernah menjadi pemilik Learning State (Architecture §6, §9; Database Design §8).
+All of the above AI outputs are **structured judgments or conversational text** returned to the calling Application Module. AI never determines whether a subtopic is "mastered," never writes to PostgreSQL, and never owns the Learning State (Architecture §6, §9; Database Design §8).
 
-Sesuai Tech Stack Specification (Section AI Provider & Model Configuration), `ai_service` **tidak terikat pada satu provider atau model tunggal**. Seluruh empat capability di atas dijalankan melalui sebuah **LLM Provider Abstraction** di dalam `ai_service`, yang meneruskan request ke provider yang sedang dikonfigurasi — OpenRouter (default), Featherless.ai (optional), atau Mock AI Provider (development/testing). Application Module tidak pernah mengetahui provider atau model mana yang sedang aktif.
+Per the Tech Stack Specification (Section AI Provider & Model Configuration), `ai_service` **is not tied to a single provider or model**. All four capabilities above are executed through an **LLM Provider Abstraction** inside `ai_service`, which forwards the request to whichever provider is currently configured — OpenRouter (default), Featherless.ai (optional), or Mock AI Provider (development/testing). The Application Module never knows which provider or model is currently active.
 
-### Boundary antar Layer
+### Boundaries Between Layers
 
-| Layer | Boleh melakukan | Tidak boleh melakukan |
+| Layer | May do | Must not do |
 |---|---|---|
-| **React (Frontend)** | Memanggil Laravel REST API | Memanggil external LLM provider langsung; memanggil `ai_service` langsung; membaca/menulis PostgreSQL langsung |
-| **Laravel (Application Modules)** | Routing, validasi, ownership check, business logic, transaksi database, memanggil `ai_service` | Melewati validasi AI output; mempersist raw AI output tanpa validasi; mengetahui provider/model spesifik yang sedang aktif |
-| **`ai_service` (in-process Laravel service)** | Membangun prompt, memilih provider & model melalui LLM Provider Abstraction, memanggil configured provider, retry/fallback, memvalidasi bentuk structured output | Menulis ke PostgreSQL; memutuskan Learning State; dipanggil langsung dari HTTP route/frontend |
-| **LLM Provider Abstraction (di dalam `ai_service`)** | Menyembunyikan detail provider-specific (base URL, auth header, request/response format) dari `ai_service` core logic dan dari Application Module | Mengekspos detail provider-specific ke luar `ai_service`; menjadi service/proses terpisah |
-| **Configured LLM Provider** (OpenRouter default / Featherless.ai optional / Mock dev-test) | Menjalankan inference atas prompt yang dikirim, sesuai model/route yang dikonfigurasi | Mengakses database; mengakses material milik user lain |
-| **PostgreSQL (Data Layer)** | Menyimpan seluruh state aplikasi (materials, topics, subtopics, chunks, quizzes, learning state) | Menerima write langsung dari AI |
+| **React (Frontend)** | Call the Laravel REST API | Call an external LLM provider directly; call `ai_service` directly; read/write PostgreSQL directly |
+| **Laravel (Application Modules)** | Routing, validation, ownership checks, business logic, database transactions, calling `ai_service` | Bypass validation of AI output; persist raw AI output without validation; know which specific provider/model is currently active |
+| **`ai_service` (in-process Laravel service)** | Build prompts, select provider & model through the LLM Provider Abstraction, call the configured provider, retry/fallback, validate the shape of structured output | Write to PostgreSQL; decide Learning State; be called directly from an HTTP route/frontend |
+| **LLM Provider Abstraction (inside `ai_service`)** | Hide provider-specific details (base URL, auth header, request/response format) from `ai_service` core logic and from the Application Module | Expose provider-specific details outside `ai_service`; become a separate service/process |
+| **Configured LLM Provider** (OpenRouter default / Featherless.ai optional / Mock dev-test) | Run inference on the prompt sent to it, per the configured model/route | Access the database; access material belonging to another user |
+| **PostgreSQL (Data Layer)** | Store all application state (materials, topics, subtopics, chunks, quizzes, learning state) | Accept direct writes from AI |
 
-Ini konsisten dengan diagram arsitektur tingkat tinggi di Architecture Blueprint §3: *"the AI Layer never writes to the Data Layer directly, and the AI Orchestrator never bypasses the Application Modules."* Di level implementasi (API Design §2, digeneralisasi sesuai Tech Stack Specification menjadi provider-agnostic), diagram ini diterjemahkan menjadi:
+This is consistent with the high-level architecture diagram in Architecture Blueprint §3: *"the AI Layer never writes to the Data Layer directly, and the AI Orchestrator never bypasses the Application Modules."* At the implementation level (API Design §2, generalized per the Tech Stack Specification into a provider-agnostic form), this diagram translates to:
 
 ```
 React SPA → Laravel REST API → Application Module → ai_service → LLM Provider Abstraction → Configured LLM Provider
                                                                                                         ↓
-                                                                              ai_service memvalidasi structured output
+                                                                              ai_service validates the structured output
                                                                                                         ↓
-                                                                    Application Module (business logic deterministik)
+                                                                    Application Module (deterministic business logic)
                                                                                                         ↓
                                                                                                    PostgreSQL
                                                                                                         ↓
                                                                                         Laravel API → React SPA (JSON response)
 ```
 
-Default runtime path untuk MVP:
+Default runtime path for the MVP:
 
 ```
 Application Module → ai_service → LLM Provider Abstraction → OpenRouter → openrouter/free
 ```
 
-### Prinsip Final (tidak dapat dinegosiasikan)
+### Final Principles (non-negotiable)
 
-1. `ai_service` adalah in-process Laravel service — dipanggil melalui function/service call biasa di dalam proses PHP yang sama, bukan HTTP call ke service terpisah (Architecture §5: *"Communication pattern: modules communicate through direct in-process function/service calls... only Study Session and Processing call AI Orchestration"*).
-2. Laravel adalah satu-satunya owner application/database state (Database Design Prinsip #2).
-3. AI tidak pernah menulis database secara langsung — seluruh write dilakukan Application Module setelah menerima & memvalidasi structured output.
-4. `ai_service` bersifat thin & stateless — tidak menyimpan apa pun antar request, tidak punya tabel sendiri (Database Design §2: *"ai_service — tidak ada tabel"*).
-5. Retrieval berbasis PostgreSQL filtering (`material_id` + `topic_id`/`subtopic_id`), tanpa vector database/embedding untuk MVP.
-6. Frontend tidak pernah memanggil external LLM provider langsung, dan tidak pernah menerima raw AI output — hanya hasil yang sudah divalidasi & diproses Laravel (API Design §1).
-7. `ai_service` **provider-agnostic**: business logic Application Module tidak pernah bergantung langsung pada OpenRouter, Featherless.ai, atau model tertentu — seluruh detail provider-specific diisolasi di dalam LLM Provider Abstraction dan dikonfigurasi melalui environment variables (Tech Stack Specification, Section AI Provider & Model Configuration).
+1. `ai_service` is an in-process Laravel service — invoked through an ordinary function/service call within the same PHP process, not an HTTP call to a separate service (Architecture §5: *"Communication pattern: modules communicate through direct in-process function/service calls... only Study Session and Processing call AI Orchestration"*).
+2. Laravel is the sole owner of application/database state (Database Design Principle #2).
+3. AI never writes to the database directly — all writes are performed by the Application Module after receiving & validating the structured output.
+4. `ai_service` is thin & stateless — it stores nothing between requests, and has no table of its own (Database Design §2: *"ai_service — no table"*).
+5. Retrieval is based on PostgreSQL filtering (`material_id` + `topic_id`/`subtopic_id`), with no vector database/embedding for the MVP.
+6. The frontend never calls an external LLM provider directly, and never receives raw AI output — only results that have already been validated & processed by Laravel (API Design §1).
+7. `ai_service` is **provider-agnostic**: the Application Module's business logic never depends directly on OpenRouter, Featherless.ai, or a specific model — all provider-specific detail is isolated inside the LLM Provider Abstraction and configured via environment variables (Tech Stack Specification, Section AI Provider & Model Configuration).
 
 ---
 
@@ -126,46 +126,46 @@ flowchart LR
     MOD --> DB[(PostgreSQL)]
 ```
 
-Jika filter query tidak menghasilkan chunk sama sekali untuk `material_id` + `topic_id`/`subtopic_id` yang diminta, Laravel **tidak memanggil LLM sama sekali** — ini adalah application-level failure (`422 Unprocessable Entity` untuk quiz generation), bukan sesuatu yang "ditutupi" dengan jawaban AI berbasis general knowledge (Architecture §13; API Design §12). Pengecualian: untuk Explanation, jika konteks kosong, `ai_service` tetap dipanggil namun diinstruksikan secara eksplisit untuk menyatakan materi tidak mencakup topik tersebut (API Design §14.2) — lihat §6.
+If the filter query returns no chunks at all for the requested `material_id` + `topic_id`/`subtopic_id`, Laravel **does not call the LLM at all** — this is an application-level failure (`422 Unprocessable Entity` for quiz generation), not something "papered over" with an AI answer based on general knowledge (Architecture §13; API Design §12). Exception: for Explanation, if the context is empty, `ai_service` is still called but is explicitly instructed to state that the material does not cover the topic (API Design §14.2) — see §6.
 
-Alur ini tidak berubah oleh penggantian provider — retrieval sepenuhnya terjadi di PostgreSQL sebelum `ai_service` dipanggil, terlepas dari provider/model mana yang dikonfigurasi di baliknya.
+This flow does not change when the provider is swapped — retrieval happens entirely in PostgreSQL before `ai_service` is called, regardless of which provider/model is configured behind it.
 
 ### 2.3 Fallback Flow
 
 ```mermaid
 flowchart TD
-    START[ai_service menerima request] --> P1[Call Configured Provider + Route:<br/>default openrouter/free]
-    P1 --> P1OK{Berhasil &<br/>tidak timeout?}
+    START[ai_service receives request] --> P1[Call Configured Provider + Route:<br/>default openrouter/free]
+    P1 --> P1OK{Succeeded &<br/>no timeout?}
     P1OK -->|yes| VAL1{Structured output valid?}
-    P1OK -->|no: fail/timeout| P1RETRY[Retry sesuai configured policy<br/>pada provider/route yang sama]
-    P1RETRY --> P1RETRYOK{Berhasil?}
+    P1OK -->|no: fail/timeout| P1RETRY[Retry per configured policy<br/>on the same provider/route]
+    P1RETRY --> P1RETRYOK{Succeeded?}
     P1RETRYOK -->|yes| VAL1
-    P1RETRYOK -->|no| FB{Optional provider/model<br/>fallback dikonfigurasi?}
-    FB -->|yes, mis. Featherless.ai| FBCALL[Call configured fallback provider/model]
-    FB -->|tidak dikonfigurasi| FAIL[Hard failure]
-    FBCALL --> FBOK{Berhasil?}
+    P1RETRYOK -->|no| FB{Optional provider/model<br/>fallback configured?}
+    FB -->|yes, e.g. Featherless.ai| FBCALL[Call configured fallback provider/model]
+    FB -->|not configured| FAIL[Hard failure]
+    FBCALL --> FBOK{Succeeded?}
     FBOK -->|yes| VAL2{Structured output valid?}
     FBOK -->|no| FAIL
-    VAL1 -->|valid| RETURN[Return structured result<br/>ke Application Module]
-    VAL1 -->|invalid| REGEN1[Retry generation<br/>sesuai configured policy<br/>pada provider/route yang sama]
+    VAL1 -->|valid| RETURN[Return structured result<br/>to Application Module]
+    VAL1 -->|invalid| REGEN1[Retry generation<br/>per configured policy<br/>on the same provider/route]
     REGEN1 --> VAL1B{Valid?}
     VAL1B -->|yes| RETURN
     VAL1B -->|no| FB
     VAL2 -->|valid| RETURN
-    VAL2 -->|invalid| REGEN2[Retry generation<br/>pada fallback provider/model]
+    VAL2 -->|invalid| REGEN2[Retry generation<br/>on the fallback provider/model]
     REGEN2 --> VAL2B{Valid?}
     VAL2B -->|yes| RETURN
     VAL2B -->|no| FAIL
-    FAIL --> HARDFAIL["Hard failure:<br/>422 (invalid structure/insufficient context)<br/>atau 503 (provider unreachable)<br/>Tidak ada partial persistence"]
+    FAIL --> HARDFAIL["Hard failure:<br/>422 (invalid structure/insufficient context)<br/>or 503 (provider unreachable)<br/>No partial persistence"]
 ```
 
-**Design Decision:** Source documents lama (API Design §14, §7 `POST /api/materials`) mendefinisikan urutan retry/fallback yang terikat pada dua model spesifik. Sesuai Tech Stack Specification (Section 7.2 — Fallback Strategy), fallback logic sekarang **tidak** didefinisikan sebagai satu pasangan primary-model → fallback-model yang fixed, melainkan tiga level yang bersifat **configurable**:
+**Design Decision:** Older source documents (API Design §14, §7 `POST /api/materials`) defined a retry/fallback order tied to two specific models. Per the Tech Stack Specification (Section 7.2 — Fallback Strategy), the fallback logic is now **not** defined as a single fixed primary-model → fallback-model pair, but rather three **configurable** levels:
 
-1. **Provider fallback** — jika provider default (OpenRouter) tidak dapat diakses/gagal, `ai_service` dapat dikonfigurasi untuk mencoba provider opsional (Featherless.ai) bila tersedia dan dikonfigurasi.
-2. **Model fallback** — jika implementasi menggunakan pinned model, model-level fallback dapat menggunakan model kompatibel lain pada provider yang sama (mis. `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`).
-3. **Development fallback** — jika tidak ada provider real yang dapat diakses (mis. local development/automated testing), `ai_service` menggunakan Mock AI Provider.
+1. **Provider fallback** — if the default provider (OpenRouter) cannot be reached/fails, `ai_service` can be configured to try the optional provider (Featherless.ai) if it is available and configured.
+2. **Model fallback** — if the implementation uses a pinned model, model-level fallback can use another compatible model on the same provider (e.g. `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`).
+3. **Development fallback** — if no real provider is reachable (e.g. local development/automated testing), `ai_service` uses the Mock AI Provider.
 
-Untuk kegagalan **validasi bentuk structured output** (JSON valid tapi shape salah), prinsip Architecture §13 — *"retry generation; if still invalid, treat as pipeline failure"* — tetap dipertahankan: `ai_service` menerapkan retry structural-validation pada provider/route yang sedang aktif terlebih dahulu (sesuai configured retry policy) sebelum berpindah ke fallback provider/model (jika dikonfigurasi), lalu ke hard failure jika seluruh opsi habis. Modul aplikasi tidak pernah mengetahui detail ini — seluruhnya ditangani secara internal oleh `ai_service`.
+For failures in **validating the shape of the structured output** (valid JSON but the wrong shape), the principle from Architecture §13 — *"retry generation; if still invalid, treat as pipeline failure"* — is retained: `ai_service` first applies structural-validation retries on the currently active provider/route (per the configured retry policy) before moving to a fallback provider/model (if configured), and finally to a hard failure once all options are exhausted. The application modules never know these details — everything is handled internally by `ai_service`.
 
 ---
 
@@ -173,14 +173,14 @@ Untuk kegagalan **validasi bentuk structured output** (JSON valid tapi shape sal
 
 ### Responsibility
 
-`ai_service` adalah **thin, stateless abstraction layer** di dalam Laravel yang menjadi satu-satunya komponen yang boleh berbicara dengan external LLM provider — melalui sebuah **LLM Provider Abstraction** di dalamnya (Architecture §5: *"AI Orchestration — The only module allowed to talk to the LLM Interface"*; Tech Stack Specification: *"Service ini menjadi satu-satunya caller ke external LLM provider — melalui sebuah LLM Provider Abstraction"*). Hanya dua module yang boleh memanggil `ai_service`: **Processing** (topic/subtopic identification) dan **Study Session** (yang selanjutnya mencakup Quiz — lihat §4).
+`ai_service` is a **thin, stateless abstraction layer** inside Laravel that is the only component allowed to talk to an external LLM provider — through an **LLM Provider Abstraction** inside it (Architecture §5: *"AI Orchestration — The only module allowed to talk to the LLM Interface"*; Tech Stack Specification: *"This service is the sole caller to the external LLM provider — through an LLM Provider Abstraction"*). Only two modules are allowed to call `ai_service`: **Processing** (topic/subtopic identification) and **Study Session** (which subsequently covers Quiz — see §4).
 
 ### Boundary
 
-- `ai_service` **tidak** memiliki tabel database sendiri (Database Design §2).
-- `ai_service` **tidak** mempertahankan state antar request — setiap pemanggilan menerima seluruh context yang dibutuhkan sebagai parameter (retrieved chunks, task input) dan mengembalikan hasil tanpa efek samping.
-- `ai_service` **tidak** pernah dipanggil langsung dari route/controller HTTP sebagai endpoint terpisah — ia dipanggil secara in-process dari dalam Application Module (Processing Module, atau Quiz/Explanation Controller di bawah Study Session), persis sebagaimana didefinisikan di API Design §3: *"no dedicated endpoint — invoked internally by Study Session and Quiz modules."*
-- `ai_service` **tidak** mengekspos detail provider-specific (base URL, API key, format request/response provider tertentu) ke Application Module — seluruhnya diisolasi di dalam LLM Provider Abstraction (implementation/configuration layer, mis. per-provider adapter class di dalam `ai_service`).
+- `ai_service` **does not** have its own database table (Database Design §2).
+- `ai_service` **does not** retain state between requests — each call receives all the context it needs as parameters (retrieved chunks, task input) and returns a result with no side effects.
+- `ai_service` **is never** called directly from an HTTP route/controller as a separate endpoint — it is invoked in-process from within an Application Module (Processing Module, or the Quiz/Explanation Controller under Study Session), exactly as defined in API Design §3: *"no dedicated endpoint — invoked internally by Study Session and Quiz modules."*
+- `ai_service` **does not** expose provider-specific detail (base URL, API key, a given provider's request/response format) to the Application Module — all of it is isolated inside the LLM Provider Abstraction (an implementation/configuration layer, e.g. a per-provider adapter class inside `ai_service`).
 
 ### LLM Provider Abstraction
 
@@ -197,21 +197,21 @@ OpenRouter              Featherless.ai         Mock AI Provider
 └── openrouter/free  (default route — free-model router)
 ```
 
-Abstraksi ini tetap merupakan **in-process abstraction** di dalam Laravel — bukan service, package, atau container terpisah. `ai_service` memilih provider dan model aktif berdasarkan konfigurasi environment (lihat §11.3), memanggil provider tersebut melalui interface yang seragam, lalu menormalisasi response menjadi format internal yang konsisten sebelum divalidasi. Application Module hanya berbicara dengan `ai_service`, tidak pernah dengan provider di baliknya.
+This abstraction remains an **in-process abstraction** inside Laravel — not a separate service, package, or container. `ai_service` selects the active provider and model based on environment configuration (see §11.3), calls that provider through a uniform interface, then normalizes the response into a consistent internal format before it is validated. The Application Module only talks to `ai_service`, never to the provider behind it.
 
 ### Internal Responsibilities
 
-| Tanggung Jawab | Deskripsi |
+| Responsibility | Description |
 |---|---|
-| **Prompt construction** | Merangkai tiga bagian logis: role/instruction, retrieved context (chunks), task-specific input (lihat §9). |
-| **Provider & model selection** | Menentukan provider aktif (OpenRouter default, Featherless.ai optional, Mock untuk dev/test) dan route/model aktif (`openrouter/free` default, atau pinned model bila dikonfigurasi) melalui LLM Provider Abstraction, berdasarkan environment configuration (lihat §11.3). |
-| **Provider communication** | Mengirim request ke configured provider dengan model/route & prompt yang sudah dibangun, melalui LLM Provider Abstraction; menangani timeout. |
-| **Retry/fallback** | Retry sesuai configured policy pada provider/route aktif, lalu optional fallback ke provider/model lain jika dikonfigurasi (lihat §2.3, §11). |
-| **Structured-output validation** | Memvalidasi bentuk (shape) JSON terhadap schema tiap capability (lihat §10) sebelum mengembalikan hasil ke Application Module — independen dari provider/model yang sedang digunakan. |
-| **Response normalization** | Menormalisasi response dari provider (yang mungkin berbeda format kecil antar provider meski sama-sama OpenAI-compatible) menjadi satu format internal yang konsisten untuk dikonsumsi Application Module. |
-| **Error handling** | Mengklasifikasikan kegagalan (timeout, provider error, invalid JSON, empty response) dan mengembalikan sinyal kegagalan yang jelas ke pemanggil (lihat §13) — bukan exception yang tidak tertangani. |
+| **Prompt construction** | Assembles three logical parts: role/instruction, retrieved context (chunks), task-specific input (see §9). |
+| **Provider & model selection** | Determines the active provider (OpenRouter default, Featherless.ai optional, Mock for dev/test) and the active route/model (`openrouter/free` default, or a pinned model if configured) through the LLM Provider Abstraction, based on environment configuration (see §11.3). |
+| **Provider communication** | Sends the request to the configured provider with the built model/route & prompt, through the LLM Provider Abstraction; handles timeouts. |
+| **Retry/fallback** | Retries per the configured policy on the active provider/route, then optionally falls back to another provider/model if configured (see §2.3, §11). |
+| **Structured-output validation** | Validates the shape of the JSON against each capability's schema (see §10) before returning the result to the Application Module — independent of the provider/model in use. |
+| **Response normalization** | Normalizes the provider's response (which may differ slightly in format between providers even when both are OpenAI-compatible) into one consistent internal format for the Application Module to consume. |
+| **Error handling** | Classifies failures (timeout, provider error, invalid JSON, empty response) and returns a clear failure signal to the caller (see §13) — not an unhandled exception. |
 
-### Public Interface (conceptual — internal Laravel methods, bukan HTTP routes)
+### Public Interface (conceptual — internal Laravel methods, not HTTP routes)
 
 ```
 ai_service->identifyTopics(string $chunkedText): TopicIdentificationResult|AiFailure
@@ -220,7 +220,7 @@ ai_service->generateQuiz(array $contextChunks, string $difficulty, int $question
 ai_service->evaluateAnswer(string $questionText, string $correctAnswer, string $submittedAnswer): AnswerEvaluationResult|AiFailure
 ```
 
-Empat method ini persis memetakan ke empat AI capability di §4. Signature method ini **tidak mengandung parameter provider/model** — provider dan model sepenuhnya ditentukan oleh konfigurasi environment yang dibaca LLM Provider Abstraction di dalam `ai_service`, sehingga Application Module tetap tidak pernah bergantung pada provider tertentu. Tidak ada method tambahan di luar yang dibutuhkan source documents (Design Rule: *"Jangan membuat AI feature baru yang tidak ada di source documents"*).
+These four methods map exactly to the four AI capabilities in §4. Their signatures **contain no provider/model parameter** — the provider and model are entirely determined by the environment configuration read by the LLM Provider Abstraction inside `ai_service`, so the Application Module still never depends on a specific provider. There are no additional methods beyond what the source documents require (Design Rule: *"Do not create a new AI feature that is not in the source documents"*).
 
 ---
 
@@ -228,12 +228,12 @@ Empat method ini persis memetakan ke empat AI capability di §4. Signature metho
 
 | Capability | Trigger | Input | Retrieval | Output | Persistence |
 |---|---|---|---|---|---|
-| **Topic/Subtopic Identification** | `POST /api/materials` (upload PDF) | Seluruh chunked text hasil extraction (material baru) | Tidak ada (material belum punya chunk tersimpan; input berasal langsung dari hasil chunking in-memory) | JSON: array topics `{name, description, subtopics:[{name, description}]}` | `topics`, `subtopics`, `chunks` (dengan `topic_id`/`subtopic_id`), `materials.status = 'ready'` — satu transaction |
-| **Teach Me / Explanation** | `POST /api/study-sessions/{studySession}/explanations` | `subtopic_id`, `intent` (`explain`/`simplify`/`example`/`review`), `message` (opsional) | `SELECT content FROM chunks WHERE material_id = ? AND (topic_id = ? OR subtopic_id = ?) ORDER BY chunk_index` | Teks percakapan bebas (tidak terstruktur) | Tidak ada — tidak ada chat-log table (Database Design §3) |
-| **Quiz Generation** | `POST /api/study-sessions/{studySession}/quizzes` | `topic_id`, `subtopic_id` (opsional), `difficulty`, `question_count` (3–10, default 5) | Sama seperti Explanation, discoped ke `topic_id`/`subtopic_id` yang diminta | JSON: array questions `{question_type, question_text, options?, correct_answer, subtopic_id, order_index}` | `quizzes`, `quiz_questions` — satu transaction |
-| **Answer Evaluation** | `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer` | `question_text`, `correct_answer` (internal), `submitted_answer` | Tidak ada retrieval baru — konteks sudah melekat pada `quiz_question` yang tersimpan | JSON: `{is_correct: boolean, feedback: string}` | `quiz_answers` (insert), `subtopics.mastery_score`/`status` (update), `quizzes` (conditional update jika quiz selesai) — satu transaction |
+| **Topic/Subtopic Identification** | `POST /api/materials` (upload PDF) | The entire chunked text from extraction (new material) | None (the material has no stored chunks yet; the input comes directly from the in-memory chunking result) | JSON: array of topics `{name, description, subtopics:[{name, description}]}` | `topics`, `subtopics`, `chunks` (with `topic_id`/`subtopic_id`), `materials.status = 'ready'` — one transaction |
+| **Teach Me / Explanation** | `POST /api/study-sessions/{studySession}/explanations` | `subtopic_id`, `intent` (`explain`/`simplify`/`example`/`review`), `message` (optional) | `SELECT content FROM chunks WHERE material_id = ? AND (topic_id = ? OR subtopic_id = ?) ORDER BY chunk_index` | Free conversational text (unstructured) | None — there is no chat-log table (Database Design §3) |
+| **Quiz Generation** | `POST /api/study-sessions/{studySession}/quizzes` | `topic_id`, `subtopic_id` (optional), `difficulty`, `question_count` (3–10, default 5) | Same as Explanation, scoped to the requested `topic_id`/`subtopic_id` | JSON: array of questions `{question_type, question_text, options?, correct_answer, subtopic_id, order_index}` | `quizzes`, `quiz_questions` — one transaction |
+| **Answer Evaluation** | `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer` | `question_text`, `correct_answer` (internal), `submitted_answer` | No new retrieval — the context is already attached to the stored `quiz_question` | JSON: `{is_correct: boolean, feedback: string}` | `quiz_answers` (insert), `subtopics.mastery_score`/`status` (update), `quizzes` (conditional update if the quiz is complete) — one transaction |
 
-Empat capability ini persis sama dengan yang didefinisikan di Architecture §6 (*"Where structured output is required"*) dan API Design §14 — tidak ada capability tambahan. Penggantian provider/model tidak mengubah kolom "Trigger", "Input", "Retrieval", "Output", atau "Persistence" pada tabel di atas — hanya bagaimana `ai_service` menjalankan tahap inference di baliknya (lihat §3, §11).
+These four capabilities are exactly the ones defined in Architecture §6 (*"Where structured output is required"*) and API Design §14 — there are no additional capabilities. Swapping the provider/model does not change the "Trigger," "Input," "Retrieval," "Output," or "Persistence" columns in the table above — only how `ai_service` runs the inference stage behind it (see §3, §11).
 
 ---
 
@@ -244,54 +244,54 @@ Empat capability ini persis sama dengan yang didefinisikan di Architecture §6 (
 ```
 PDF (multipart upload, POST /api/materials)
   ↓ Laravel Filesystem — storage/app/private
-Extraction (spatie/pdf-to-text) — deterministic library, bukan AI
+Extraction (spatie/pdf-to-text) — deterministic library, not AI
   ↓
-Cleaning (PHP native, in-memory, tidak dipersist)
+Cleaning (native PHP, in-memory, not persisted)
   ↓
-Fixed-Length Chunking (~1.000 karakter, ~200 karakter overlap, tanpa heading detection)
-  ↓ (di memory, belum di-insert ke database)
+Fixed-Length Chunking (~1,000 characters, ~200 character overlap, no heading detection)
+  ↓ (in memory, not yet inserted into the database)
 ai_service->identifyTopics($chunkedText)
   → Prompt: role/instruction ("identify topics and subtopics from this material") + full chunked text
   → LLM Provider Abstraction → Configured Provider (default: OpenRouter — openrouter/free);
-    retry sesuai configured policy → optional fallback provider/model (mis. Featherless.ai) bila dikonfigurasi
-  → Validasi shape: array of { name, description, subtopics: [{ name, description }] }
-  → invalid setelah retry & fallback habis → pipeline failure
+    retry per configured policy → optional fallback provider/model (e.g. Featherless.ai) if configured
+  → Shape validation: array of { name, description, subtopics: [{ name, description }] }
+  → invalid after retry & fallback are exhausted → pipeline failure
   ↓
-Laravel: tagging setiap chunk dengan topic_id/subtopic_id berdasarkan hasil AI
+Laravel: tags each chunk with topic_id/subtopic_id based on the AI result
   ↓
-PostgreSQL — SATU transaction:
+PostgreSQL — ONE transaction:
    INSERT topics
    INSERT subtopics
-   INSERT chunks (dengan topic_id/subtopic_id hasil tagging)
+   INSERT chunks (with topic_id/subtopic_id from tagging)
    UPDATE materials SET status = 'ready'
   ↓
 Response: material JSON (status: "ready" | "failed")
 ```
 
-### Pembagian Tanggung Jawab (Design Rule: AI hanya identification, Laravel yang persist)
+### Division of Responsibility (Design Rule: AI only does identification, Laravel does the persisting)
 
-| Langkah | Dilakukan Oleh |
+| Step | Performed by |
 |---|---|
-| Extraction, cleaning, chunking | Laravel (Processing Module) — deterministic, bukan AI |
-| Identifikasi topic/subtopic dari teks | `ai_service` (AI, melalui configured provider) — mengembalikan **data terstruktur saja**, tidak menyentuh database |
-| Tagging chunk ke topic/subtopic hasil AI | Laravel (Processing Module) — mapping deterministik dari hasil AI ke setiap chunk |
-| Insert `topics`/`subtopics`/`chunks`, update `materials.status` | Laravel (Processing Module), dalam satu `DB::transaction()` |
+| Extraction, cleaning, chunking | Laravel (Processing Module) — deterministic, not AI |
+| Identifying topics/subtopics from the text | `ai_service` (AI, via the configured provider) — returns **structured data only**, does not touch the database |
+| Tagging chunks to the topics/subtopics from the AI result | Laravel (Processing Module) — deterministic mapping from the AI result to each chunk |
+| Inserting `topics`/`subtopics`/`chunks`, updating `materials.status` | Laravel (Processing Module), within a single `DB::transaction()` |
 
-Ini konsisten dengan Architecture §7: *"Topic/Subtopic ID → AI processing (AI Orchestrator + LLM, structured output)"* diikuti *"Storage → Data storage"* sebagai langkah terpisah yang dimiliki Laravel, dan Database Design §10 yang menegaskan seluruh insert terjadi dalam satu transaction setelah AI selesai.
+This is consistent with Architecture §7: *"Topic/Subtopic ID → AI processing (AI Orchestrator + LLM, structured output)"* followed by *"Storage → Data storage"* as a separate step owned by Laravel, and with Database Design §10, which confirms that all inserts happen in a single transaction after AI finishes.
 
-### Validasi Laravel
+### Laravel Validation
 
-- Bentuk JSON harus berupa array topic, masing-masing dengan `name` (string, wajib), `description` (string, opsional), dan `subtopics` (array, boleh kosong tapi harus berupa array).
-- Setiap `subtopics[].name` wajib ada.
-- Jika array topics kosong sama sekali → dianggap invalid structured output (bukan "material tanpa topic") → retry, lalu pipeline failure jika masih kosong — konsisten dengan Architecture §13: *"not silently 'Ready' with zero topics."*
+- The JSON shape must be an array of topics, each with a required `name` (string), an optional `description` (string), and `subtopics` (array, may be empty but must be an array).
+- Every `subtopics[].name` is required.
+- If the topics array is empty entirely → treated as invalid structured output (not "a material with no topic") → retry, then pipeline failure if still empty — consistent with Architecture §13: *"not silently 'Ready' with zero topics."*
 
 ### Database Persistence
 
-Satu transaction (Database Design §15) yang mencakup: `INSERT topics` (N baris, `UNIQUE(material_id, name)`), `INSERT subtopics` (N baris per topic, `UNIQUE(topic_id, name)`), `INSERT chunks` (semua chunk hasil chunking, dengan `topic_id` NOT NULL dan `subtopic_id` nullable — lihat Database Design §4 Design Decision pada `chunks`), dan `UPDATE materials.status = 'ready'`.
+One transaction (Database Design §15) covering: `INSERT topics` (N rows, `UNIQUE(material_id, name)`), `INSERT subtopics` (N rows per topic, `UNIQUE(topic_id, name)`), `INSERT chunks` (all chunks resulting from chunking, with `topic_id` NOT NULL and `subtopic_id` nullable — see Database Design §4 Design Decision on `chunks`), and `UPDATE materials.status = 'ready'`.
 
 ### Error/Fallback Behavior
 
-Kegagalan di titik manapun (extraction gagal, AI gagal setelah retry+fallback provider/model habis, validasi structured output gagal setelah retry) → seluruh transaction di-rollback → `materials.status = 'failed'` diset sebagai **update terpisah** (di luar transaction utama, karena baris `materials` sudah ada sejak awal pipeline dengan `status = 'processing'`) dengan `failed_reason` terisi. Tidak pernah ada material dengan `topics`/`subtopics`/`chunks` sebagian (Architecture §13; Database Design §10).
+A failure at any point (extraction fails, AI fails after retry+fallback provider/model are exhausted, structured output validation fails after retry) → the entire transaction is rolled back → `materials.status = 'failed'` is set as a **separate update** (outside the main transaction, because the `materials` row has existed since the start of the pipeline with `status = 'processing'`) with `failed_reason` populated. There is never a material with partial `topics`/`subtopics`/`chunks` (Architecture §13; Database Design §10).
 
 ---
 
@@ -300,41 +300,41 @@ Kegagalan di titik manapun (extraction gagal, AI gagal setelah retry+fallback pr
 ### Flow
 
 ```
-Frontend: user memilih subtopic di sidebar → POST /api/study-sessions/{studySession}/explanations
+Frontend: user selects a subtopic in the sidebar → POST /api/study-sessions/{studySession}/explanations
   { subtopic_id, intent: "explain" | "simplify" | "example" | "review", message?: string }
   ↓
-Laravel: validasi subtopic_id termasuk dalam material milik session; session harus 'active'
+Laravel: validates that subtopic_id belongs to the session's material; session must be 'active'
   ↓
-Retrieval (filter-based, bukan similarity search):
+Retrieval (filter-based, not similarity search):
   SELECT content FROM chunks
   WHERE material_id = :material_id AND (topic_id = :topic_id OR subtopic_id = :subtopic_id)
   ORDER BY chunk_index ASC
   ↓
 ai_service->explain($contextChunks, $intent, $message)
-  → Prompt: role/instruction (explain/simplify/give-example/review sesuai intent) + retrieved chunks + optional follow-up message
-  → LLM Provider Abstraction → Configured Provider (default: openrouter/free; optional fallback provider bila dikonfigurasi)
-  → Tidak ada validasi structured output — explanation adalah teks percakapan bebas
+  → Prompt: role/instruction (explain/simplify/give-example/review per intent) + retrieved chunks + optional follow-up message
+  → LLM Provider Abstraction → Configured Provider (default: openrouter/free; optional fallback provider if configured)
+  → No structured output validation — the explanation is free conversational text
   ↓
-Laravel: meneruskan teks apa adanya, tanpa mutasi state
+Laravel: forwards the text as-is, with no state mutation
   ↓
 Response: { subtopic_id, explanation: "..." }
 ```
 
-### Kenapa Tidak Ada Structured Output di Sini
+### Why There Is No Structured Output Here
 
-Product Spec §9.1 (dikutip di Architecture §6 dan API Design §14.2) hanya mewajibkan structured output untuk empat area: topic extraction, quiz generation, answer evaluation, dan output terkait learning state. Explanation **tidak termasuk** — sehingga `ai_service->explain()` mengembalikan string teks, bukan JSON, dan tidak melalui tahap validasi shape seperti tiga capability lainnya. Ini berlaku sama terlepas dari provider/model yang sedang dikonfigurasi.
+Product Spec §9.1 (quoted in Architecture §6 and API Design §14.2) only requires structured output in four areas: topic extraction, quiz generation, answer evaluation, and output related to the learning state. Explanation **is not included** — so `ai_service->explain()` returns a text string, not JSON, and does not go through the shape-validation stage like the other three capabilities. This holds regardless of which provider/model is currently configured.
 
-### Tidak Ada Chat-History Persistence
+### No Chat-History Persistence
 
-Database Design §3 dan §9 secara eksplisit menyatakan tidak ada tabel percakapan/chat log — Teach Me bersifat **request/response murni**, di-generate ulang dari retrieval setiap kali dipanggil, tanpa disimpan. Dokumen ini mengikuti keputusan tersebut secara ketat: `ai_service->explain()` tidak menulis apa pun ke database, dan endpoint `POST /api/study-sessions/{studySession}/explanations` tidak memiliki Database Effects selain retrieval (read-only).
+Database Design §3 and §9 explicitly state that there is no conversation/chat-log table — Teach Me is **purely request/response**, regenerated from retrieval every time it is called, and never stored. This document adheres to that decision strictly: `ai_service->explain()` writes nothing to the database, and the `POST /api/study-sessions/{studySession}/explanations` endpoint has no Database Effects other than retrieval (read-only).
 
 ### Insufficient Context
 
-Jika retrieval tidak menemukan chunk sama sekali untuk `subtopic_id`/`topic_id` yang diminta, Laravel tetap memanggil `ai_service`, namun prompt secara eksplisit menginstruksikan AI untuk menyatakan bahwa materi tidak mencakup topik tersebut — **bukan** menjawab dari general knowledge (Architecture §13, §8: *"the prompt instruction explicitly constrains the LLM to answer only using the provided context chunks"*). Response tetap `200 OK` dengan teks eksplanasi yang menyatakan keterbatasan tersebut, bukan error, karena ini adalah jawaban AI yang valid (API Design §14.2 Error Responses catatan pada `422`).
+If retrieval finds no chunks at all for the requested `subtopic_id`/`topic_id`, Laravel still calls `ai_service`, but the prompt explicitly instructs the AI to state that the material does not cover that topic — **not** to answer from general knowledge (Architecture §13, §8: *"the prompt instruction explicitly constrains the LLM to answer only using the provided context chunks"*). The response is still `200 OK` with explanatory text stating that limitation, not an error, because this is a valid AI answer (API Design §14.2 Error Responses, note on `422`).
 
 ### Review Weak Topics
 
-Ketika user meng-klik subtopic berstatus `needs_review` (⚠) di sidebar, alur yang sama dipanggil dengan `intent = "review"` — tidak ada endpoint atau capability terpisah; ini murni variasi task instruction pada capability Explanation yang sama (Architecture §9: Review Weak Topics *"triggers Study Session to focus AI Teacher on that subtopic, using the same retrieval scoping"*).
+When a user clicks a subtopic with `needs_review` (⚠) status in the sidebar, the same flow is invoked with `intent = "review"` — there is no separate endpoint or capability; this is purely a task-instruction variation on the same Explanation capability (Architecture §9: Review Weak Topics *"triggers Study Session to focus AI Teacher on that subtopic, using the same retrieval scoping"*).
 
 ---
 
@@ -346,47 +346,47 @@ Ketika user meng-klik subtopic berstatus `needs_review` (⚠) di sidebar, alur y
 Frontend: POST /api/study-sessions/{studySession}/quizzes
   { topic_id, subtopic_id?: null, difficulty?: null, question_count?: 5 }
   ↓
-Laravel: validasi topic_id/subtopic_id termasuk material milik session
+Laravel: validates that topic_id/subtopic_id belong to the session's material
   ↓
 Retrieval (filter-based):
   SELECT content FROM chunks
   WHERE material_id = :material_id AND (topic_id = :topic_id OR subtopic_id = :subtopic_id)
   ORDER BY chunk_index ASC
   ↓
-  Jika HASIL KOSONG → Laravel mengembalikan 422 Unprocessable Entity SEBELUM memanggil LLM
-  (insufficient context = application-level failure, bukan LLM guess — Architecture §13)
+  If the result is EMPTY → Laravel returns 422 Unprocessable Entity BEFORE calling the LLM
+  (insufficient context = application-level failure, not an LLM guess — Architecture §13)
   ↓
 ai_service->generateQuiz($contextChunks, $difficulty, $questionCount)
   → Prompt: role/instruction ("generate {question_count} {difficulty} questions") + retrieved chunks + difficulty
   → LLM Provider Abstraction → Configured Provider (default: openrouter/free);
-    retry sesuai configured policy → optional fallback provider/model bila dikonfigurasi
-  → Validasi structured output: array questions, tiap item punya question_type,
-    question_text, options (untuk multiple_choice), correct_answer, subtopic reference
-  → invalid setelah retry & fallback habis → hard failure (422/503), TIDAK ADA partial quiz yang dipersist
+    retry per configured policy → optional fallback provider/model if configured
+  → Structured output validation: array of questions, each item has question_type,
+    question_text, options (for multiple_choice), correct_answer, subtopic reference
+  → invalid after retry & fallback are exhausted → hard failure (422/503), NO partial quiz is persisted
   ↓
-Laravel: validasi ulang di level aplikasi (shape final) sebelum insert
+Laravel: re-validates at the application level (final shape) before insert
   ↓
-PostgreSQL — SATU transaction:
+PostgreSQL — ONE transaction:
    INSERT quizzes (status = 'in_progress')
-   INSERT quiz_questions (N baris, correct_answer disimpan tapi TIDAK dikirim ke frontend)
+   INSERT quiz_questions (N rows, correct_answer stored but NOT sent to the frontend)
   ↓
-Response: quiz + questions (correct_answer di-strip dari response)
+Response: quiz + questions (correct_answer stripped from the response)
 ```
 
 ### Structured Validation → Laravel Validation → Quiz Persistence
 
-Ada dua lapis validasi yang berbeda perannya:
+There are two validation layers with different roles:
 
-1. **`ai_service` structural validation** — memastikan output benar-benar JSON valid dengan field yang diharapkan (shape check), independen dari provider/model yang menghasilkannya. Jika gagal → retry generation sesuai configured policy, lalu hard failure jika opsi habis.
-2. **Laravel business validation** — dijalankan setelah `ai_service` mengembalikan hasil yang secara struktural valid: memastikan setiap `subtopic_id` yang dirujuk AI benar-benar milik `topic_id` yang diminta, `question_type` termasuk enum yang didukung (`multiple_choice`, `true_false`, `short_answer` — Database Design §7), dan `options` terisi untuk tipe `multiple_choice`. Hanya setelah lolos kedua lapis ini, Laravel melakukan insert.
+1. **`ai_service` structural validation** — confirms the output is genuinely valid JSON with the expected fields (shape check), independent of the provider/model that produced it. If it fails → retry generation per the configured policy, then hard failure once options are exhausted.
+2. **Laravel business validation** — runs after `ai_service` returns a structurally valid result: confirms that every `subtopic_id` referenced by the AI genuinely belongs to the requested `topic_id`, that `question_type` is one of the supported enum values (`multiple_choice`, `true_false`, `short_answer` — Database Design §7), and that `options` is populated for the `multiple_choice` type. Only after passing both layers does Laravel perform the insert.
 
 ### Persistence
 
-Satu transaction: `INSERT quizzes` (`status = 'in_progress'`, `total_questions`) + `INSERT quiz_questions` (N baris, masing-masing dengan `subtopic_id` target — karena satu quiz topic-level bisa mencakup beberapa subtopic, Database Design §4 Design Decision pada `quiz_questions`). Quiz tidak pernah dipersist dengan hanya sebagian pertanyaannya (API Design §18).
+One transaction: `INSERT quizzes` (`status = 'in_progress'`, `total_questions`) + `INSERT quiz_questions` (N rows, each with a target `subtopic_id` — because a single topic-level quiz can span multiple subtopics, Database Design §4 Design Decision on `quiz_questions`). A quiz is never persisted with only some of its questions (API Design §18).
 
 ### Review Weak Topics Re-test
 
-Menggunakan endpoint dan capability **yang sama** — dibedakan hanya dengan `subtopic_id` terisi (mempersempit scope) dan `question_count` kecil (mis. 2, untuk "mini-question"), sesuai Database Design §4: *"Review Weak Topics ... menggunakan struktur `quizzes` yang sama dengan Quiz Me."* Tidak ada capability atau tabel tambahan untuk review.
+Uses the **same** endpoint and capability — distinguished only by a populated `subtopic_id` (narrowing the scope) and a small `question_count` (e.g. 2, for a "mini-question"), per Database Design §4: *"Review Weak Topics ... uses the same `quizzes` structure as Quiz Me."* There is no additional capability or table for review.
 
 ---
 
@@ -398,61 +398,61 @@ Menggunakan endpoint dan capability **yang sama** — dibedakan hanya dengan `su
 Frontend: POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer
   { submitted_answer: "B" }
   ↓
-Laravel: validasi pertanyaan belum dijawab (quiz_answers.quiz_question_id UNIQUE) & quiz belum completed
+Laravel: validates the question has not already been answered (quiz_answers.quiz_question_id UNIQUE) & the quiz is not completed
   ↓
-Laravel: load quiz_question.correct_answer (internal — TIDAK PERNAH dikirim ke frontend sebelumnya)
+Laravel: loads quiz_question.correct_answer (internal — NEVER sent to the frontend beforehand)
   ↓
 ai_service->evaluateAnswer($questionText, $correctAnswer, $submittedAnswer)
   → Prompt: role/instruction ("evaluate this answer against the correct answer, return correct/incorrect + feedback")
     + question_text + correct_answer + submitted_answer
   → LLM Provider Abstraction → Configured Provider (default: openrouter/free);
-    retry sesuai configured policy → optional fallback provider/model bila dikonfigurasi
-  → Validasi structured verdict: { is_correct: boolean, feedback: string }
-  → invalid/gagal setelah retry & fallback habis → 503, TIDAK ADA write ke database sama sekali
+    retry per configured policy → optional fallback provider/model if configured
+  → Structured verdict validation: { is_correct: boolean, feedback: string }
+  → invalid/failed after retry & fallback are exhausted → 503, NO write to the database at all
   ↓
-Laravel — SATU transaction (hanya dijalankan jika evaluasi AI berhasil):
+Laravel — ONE transaction (run only if the AI evaluation succeeds):
    INSERT quiz_answers (is_correct, ai_feedback, submitted_answer, answered_at)
    RECOMPUTE subtopics.mastery_score = AVG(is_correct ? 100 : 0)
-             atas SELURUH quiz_answers historis untuk subtopic_id tsb (kumulatif, bukan hanya quiz ini)
-   DERIVE subtopics.status dari fixed threshold (<60 → needs_review, 60–79 → in_progress, ≥80 → mastered)
-   IF seluruh quiz_questions pada quiz ini sudah terjawab:
+             over the ENTIRE historical quiz_answers for that subtopic_id (cumulative, not just this quiz)
+   DERIVE subtopics.status from a fixed threshold (<60 → needs_review, 60–79 → in_progress, ≥80 → mastered)
+   IF all quiz_questions in this quiz have been answered:
      UPDATE quizzes.correct_count, quizzes.score, quizzes.status = 'completed', quizzes.completed_at
   ↓
 Response: { is_correct, ai_feedback, quiz_status, subtopic: { mastery_score, status }, quiz_result? }
 ```
 
-### AI Verdict sebagai Input, Bukan Otoritas Final
+### AI Verdict as Input, Not Final Authority
 
-AI mengembalikan `is_correct` dan `feedback` sebagai **verdict per jawaban** — ini adalah *input* ke proses scoring deterministik Laravel, bukan otoritas final atas Learning State (Architecture §5: *"Quiz ... scores answers deterministically (using AI evaluation output as input, not as final authority on state)"*). Laravel-lah yang menghitung ulang `mastery_score` dari **seluruh riwayat** `quiz_answers` (bukan sekadar rata-rata sesi berjalan), sehingga mastery selalu konsisten dengan data historis yang benar-benar tersimpan. Prinsip ini berlaku sama tanpa memandang provider/model yang menghasilkan verdict tersebut.
+AI returns `is_correct` and `feedback` as a **verdict per answer** — this is *input* to Laravel's deterministic scoring process, not the final authority over the Learning State (Architecture §5: *"Quiz ... scores answers deterministically (using AI evaluation output as input, not as final authority on state)"*). It is Laravel that recomputes `mastery_score` from the **entire history** of `quiz_answers` (not just the running session average), so mastery always stays consistent with the data actually stored. This principle holds regardless of the provider/model that produced the verdict.
 
-### Learning State Tetap Deterministic dan Dimiliki Laravel
+### Learning State Remains Deterministic and Owned by Laravel
 
-- `mastery_score` dan `status` adalah kolom pada `subtopics`, dihitung dengan formula tetap (bukan ML/knowledge-tracing apa pun): rata-rata `is_correct` dari seluruh `quiz_answers` yang pernah tercatat untuk subtopic tersebut, lalu dipetakan ke threshold tetap.
-- LLM **tidak pernah** menulis `mastery_score`/`status` secara langsung — hanya Learning State logic di Laravel yang menghitung dan mempersist nilai ini (Database Design §8: *"AI tidak pernah menjadi pemilik Learning State ... perhitungan mastery_score/status sepenuhnya dilakukan oleh Laravel"*).
-- Jika evaluasi AI gagal (setelah retry & fallback provider/model habis), **tidak ada write sama sekali** ke `quiz_answers` maupun `subtopics` — state lama tetap utuh. Ini menegakkan guiding principle Architecture §13: *"never let an AI failure silently corrupt Learning State."*
+- `mastery_score` and `status` are columns on `subtopics`, computed with a fixed formula (not any kind of ML/knowledge-tracing): the average of `is_correct` across all `quiz_answers` ever recorded for that subtopic, then mapped to a fixed threshold.
+- The LLM **never** writes `mastery_score`/`status` directly — only the Learning State logic in Laravel computes and persists these values (Database Design §8: *"AI never owns the Learning State ... the computation of mastery_score/status is done entirely by Laravel"*).
+- If the AI evaluation fails (after retry & fallback provider/model are exhausted), **there is no write at all** to `quiz_answers` or `subtopics` — the prior state remains intact. This upholds the guiding principle of Architecture §13: *"never let an AI failure silently corrupt Learning State."*
 
 ### Persistence
 
-Satu transaction (Database Design §15): `INSERT quiz_answers` (1 baris) + `UPDATE subtopics` (mastery/status, 1 baris) + `UPDATE quizzes` (conditional, hanya jika quiz baru selesai). Tidak ada partial update — jika evaluasi AI gagal sebelum commit, seluruh transaction (termasuk mastery update) tidak pernah dijalankan.
+One transaction (Database Design §15): `INSERT quiz_answers` (1 row) + `UPDATE subtopics` (mastery/status, 1 row) + `UPDATE quizzes` (conditional, only if the quiz has just been completed). There is no partial update — if the AI evaluation fails before commit, the entire transaction (including the mastery update) is never run.
 
 ---
 
 ## 9. Prompt Architecture
 
-Setiap AI capability memiliki template prompt konseptual dengan struktur yang sama, mengikuti Architecture §6: *"Role/instruction → Retrieved context → Task-specific input."* Struktur ini bersifat **provider/model-agnostic** — template yang sama dikirim ke provider manapun yang sedang dikonfigurasi (OpenRouter, Featherless.ai, atau Mock) melalui LLM Provider Abstraction. Berikut struktur per capability (bukan prompt production yang panjang, hanya kerangka).
+Every AI capability has a conceptual prompt template with the same structure, following Architecture §6: *"Role/instruction → Retrieved context → Task-specific input."* This structure is **provider/model-agnostic** — the same template is sent to whichever provider is currently configured (OpenRouter, Featherless.ai, or Mock) through the LLM Provider Abstraction. Below is the structure per capability (not the full production prompt, only the skeleton).
 
 ### 9.1 Topic/Subtopic Identification
 
 ```
 [System Instruction]
-Kamu adalah asisten yang mengidentifikasi struktur topic dan subtopic dari sebuah material belajar.
-Kembalikan HANYA JSON valid sesuai schema yang diberikan, tanpa teks tambahan.
+You are an assistant that identifies the topic and subtopic structure from a piece of learning material.
+Return ONLY valid JSON per the given schema, with no additional text.
 
 [Task Instruction]
-Identifikasi topic-topic utama dan subtopic di bawah masing-masing topic dari teks material berikut.
+Identify the main topics and the subtopics under each topic from the following material text.
 
 [Retrieved Context]
-(tidak ada — material baru; input adalah seluruh chunked text)
+(none — new material; the input is the entire chunked text)
 
 [User/Input Data]
 {{full_chunked_text}}
@@ -465,33 +465,33 @@ JSON array: [{ "name": string, "description": string, "subtopics": [{ "name": st
 
 ```
 [System Instruction]
-Kamu adalah AI Teacher yang menjelaskan konsep HANYA berdasarkan konteks material yang diberikan.
-Jika konteks tidak mencakup pertanyaan, katakan materi tidak membahas topik ini — jangan menjawab
-dari pengetahuan umum di luar konteks.
+You are an AI Teacher who explains concepts ONLY based on the given material context.
+If the context does not cover the question, say the material does not discuss this topic — do not
+answer from general knowledge outside the context.
 
 [Task Instruction]
 Mode: {{intent}}  // explain | simplify | example | review
 
 [Retrieved Context]
-{{context_chunks}}  // hasil filter material_id + topic_id/subtopic_id, urut chunk_index
+{{context_chunks}}  // result of filtering by material_id + topic_id/subtopic_id, ordered by chunk_index
 
 [User/Input Data]
-{{message}}  // optional follow-up question dari user
+{{message}}  // optional follow-up question from the user
 
 [Output Requirements]
-Teks percakapan bebas (tidak terstruktur), bahasa mengikuti konteks material.
+Free conversational text (unstructured), in the language of the material's context.
 ```
 
 ### 9.3 Quiz Generation
 
 ```
 [System Instruction]
-Kamu adalah AI yang menyusun soal quiz HANYA dari konteks material yang diberikan.
-Kembalikan HANYA JSON valid sesuai schema yang diberikan.
+You are an AI that composes quiz questions ONLY from the given material context.
+Return ONLY valid JSON per the given schema.
 
 [Task Instruction]
-Buat {{question_count}} soal dengan tingkat kesulitan {{difficulty}}, masing-masing menargetkan
-salah satu subtopic yang relevan dari konteks.
+Create {{question_count}} questions at {{difficulty}} difficulty, each targeting
+one of the relevant subtopics from the context.
 
 [Retrieved Context]
 {{context_chunks}}
@@ -500,7 +500,7 @@ salah satu subtopic yang relevan dari konteks.
 difficulty = {{difficulty}}, question_count = {{question_count}}
 
 [Output Requirements]
-JSON array questions: [{ "question_type": "multiple_choice"|"true_false"|"short_answer",
+JSON array of questions: [{ "question_type": "multiple_choice"|"true_false"|"short_answer",
   "question_text": string, "options": string[]?, "correct_answer": string, "subtopic_id": integer }]
 ```
 
@@ -508,13 +508,13 @@ JSON array questions: [{ "question_type": "multiple_choice"|"true_false"|"short_
 
 ```
 [System Instruction]
-Kamu adalah evaluator jawaban quiz. Kembalikan HANYA JSON valid sesuai schema.
+You are a quiz answer evaluator. Return ONLY valid JSON per the schema.
 
 [Task Instruction]
-Bandingkan jawaban user dengan kunci jawaban, tentukan benar/salah, dan berikan feedback singkat.
+Compare the user's answer with the answer key, determine correct/incorrect, and give brief feedback.
 
 [Retrieved Context]
-(tidak ada retrieval baru — konteks sudah melekat pada question_text & correct_answer)
+(no new retrieval — the context is already attached to question_text & correct_answer)
 
 [User/Input Data]
 question_text = {{question_text}}
@@ -543,7 +543,7 @@ JSON: { "is_correct": boolean, "feedback": string }
   }
 ]
 ```
-**Validasi Laravel:** array tidak boleh kosong; setiap elemen wajib punya `name` (string, non-empty); `subtopics` wajib berupa array (boleh kosong per topic, tapi minimal satu topic harus punya minimal satu subtopic agar material tidak "Ready" dengan nol subtopic — Architecture §13).
+**Laravel Validation:** the array must not be empty; every element must have `name` (string, non-empty); `subtopics` must be an array (may be empty per topic, but at least one topic must have at least one subtopic so the material is not "Ready" with zero subtopics — Architecture §13).
 
 ### 10.2 Quiz Generation
 
@@ -565,7 +565,7 @@ JSON: { "is_correct": boolean, "feedback": string }
   }
 ]
 ```
-**Validasi Laravel:** `question_type` ∈ {`multiple_choice`, `true_false`, `short_answer`} (Database Design §7); `options` wajib array non-kosong (≥2 elemen) jika `question_type = multiple_choice`, wajib `null`/diabaikan untuk tipe lain; `correct_answer` wajib string non-empty; `subtopic_id` wajib merujuk subtopic yang benar-benar berada di bawah `topic_id` yang diminta; jumlah elemen array harus sama dengan `question_count` yang diminta.
+**Laravel Validation:** `question_type` ∈ {`multiple_choice`, `true_false`, `short_answer`} (Database Design §7); `options` must be a non-empty array (≥2 elements) if `question_type = multiple_choice`, and must be `null`/ignored for other types; `correct_answer` must be a non-empty string; `subtopic_id` must reference a subtopic that genuinely belongs under the requested `topic_id`; the number of array elements must equal the requested `question_count`.
 
 ### 10.3 Answer Evaluation
 
@@ -575,94 +575,94 @@ JSON: { "is_correct": boolean, "feedback": string }
   "feedback": "Correct — polymorphism lets a single interface represent different underlying forms."
 }
 ```
-**Validasi Laravel:** `is_correct` wajib boolean (bukan string `"true"`/`"false"`); `feedback` wajib string (boleh pendek, tidak boleh kosong/null — dipersist ke `quiz_answers.ai_feedback`).
+**Laravel Validation:** `is_correct` must be a boolean (not the string `"true"`/`"false"`); `feedback` must be a string (may be short, but must not be empty/null — it is persisted to `quiz_answers.ai_feedback`).
 
-### 10.4 Explanation (tidak terstruktur — referensi saja)
+### 10.4 Explanation (unstructured — reference only)
 
 ```
 "Polymorphism lets objects of different classes be treated through a common interface..."
 ```
-Tidak ada schema JSON untuk capability ini — hanya validasi bahwa response bukan string kosong (empty response dianggap kegagalan, lihat §13).
+There is no JSON schema for this capability — only validation that the response is not an empty string (an empty response is treated as a failure, see §13).
 
-### Catatan Provider-Agnostic
+### Note on Provider-Agnosticism
 
-Kontrak schema pada §10.1–10.3 berlaku **independen dari provider/model** yang sedang digunakan (Tech Stack Specification, Section 7.4: *"Structured-output validation bekerja independen dari provider/model yang sedang digunakan — kontrak schema tetap sama apapun provider/model di baliknya"*). Apabila suatu provider/model tidak dapat secara reliable memenuhi kontrak structured-output tersebut, `ai_service` dapat retry atau berpindah ke provider/model lain yang telah dikonfigurasi, tanpa mengubah schema ataupun validasi Laravel di atas.
+The schema contracts in §10.1–10.3 apply **independently of the provider/model** in use (Tech Stack Specification, Section 7.4: *"Structured-output validation works independently of the provider/model in use — the schema contract stays the same regardless of the provider/model behind it"*). If a given provider/model cannot reliably meet that structured-output contract, `ai_service` may retry or switch to another configured provider/model, without changing the schema or the Laravel validation above.
 
 ---
 
 ## 11. Provider & Model Strategy
 
-Sesuai Tech Stack Specification, Studyback **tidak** mengunci `ai_service` pada satu provider atau satu model tunggal. Provider dan model dikonfigurasi melalui environment variables, dan Application Module tidak pernah bergantung langsung pada salah satunya.
+Per the Tech Stack Specification, Studyback does **not** lock `ai_service` to a single provider or a single model. The provider and model are configured via environment variables, and the Application Module never depends directly on either of them.
 
 ### 11.1 Default Provider — OpenRouter (`openrouter/free`)
 
-OpenRouter adalah **default provider** untuk seluruh empat AI capability pada MVP, dengan route default `openrouter/free`:
+OpenRouter is the **default provider** for all four AI capabilities in the MVP, with the default route `openrouter/free`:
 
-- OpenRouter menyediakan OpenAI-compatible API, sehingga integrasi dari sisi `ai_service` tetap sederhana melalui HTTP client yang sama.
-- `openrouter/free` adalah **router**, bukan model individual — ia secara dinamis memilih salah satu model gratis yang tersedia di OpenRouter pada saat request dikirim, mempertimbangkan kapabilitas yang dibutuhkan request (mis. structured output).
-- Karena pool model gratis di baliknya dapat berubah dari waktu ke waktu, model spesifik yang akhirnya dipilih oleh `openrouter/free` diperlakukan sebagai **runtime/implementation detail**, bukan keputusan arsitektur aplikasi yang permanen.
+- OpenRouter provides an OpenAI-compatible API, so the integration on the `ai_service` side stays simple through the same HTTP client.
+- `openrouter/free` is a **router**, not an individual model — it dynamically picks one of the free models available on OpenRouter at request time, taking into account the capabilities the request needs (e.g. structured output).
+- Because the pool of free models behind it can change over time, the specific model ultimately selected by `openrouter/free` is treated as a **runtime/implementation detail**, not a permanent application architecture decision.
 
 ### 11.2 Optional Provider — Featherless.ai
 
-Featherless.ai tetap didukung sebagai **provider opsional**, terutama karena:
+Featherless.ai remains supported as an **optional provider**, mainly because:
 
-- Merupakan hackathon partner untuk event ini.
-- Peserta berpotensi memperoleh inference credits apabila berhasil klaim.
-- Menyediakan endpoint OpenAI-compatible, sehingga dapat diintegrasikan melalui LLM Provider Abstraction yang sama tanpa mengubah business logic aplikasi.
+- It is a hackathon partner for this event.
+- Participants may potentially obtain inference credits if successfully claimed.
+- It offers an OpenAI-compatible endpoint, so it can be integrated through the same LLM Provider Abstraction without changing the application's business logic.
 
-Featherless.ai **tidak** menjadi provider wajib. Apabila tidak dikonfigurasi atau credits tidak berhasil diklaim, aplikasi tetap dapat berjalan sepenuhnya menggunakan OpenRouter (atau Mock AI Provider untuk development).
+Featherless.ai is **not** a required provider. If it is not configured, or credits are not successfully claimed, the application can still run entirely on OpenRouter (or the Mock AI Provider for development).
 
 ### 11.3 Development/Test Provider — Mock AI Provider
 
-Mock AI Provider digunakan untuk local development dan automated testing tanpa memanggil real AI API — mis. ketika tidak ada koneksi ke provider real, atau ketika demo/testing membutuhkan output yang deterministik dan cepat, tanpa rate limit atau biaya inference.
+The Mock AI Provider is used for local development and automated testing without calling a real AI API — e.g. when there is no connection to a real provider, or when a demo/test needs deterministic, fast output with no rate limits or inference cost.
 
 ### 11.4 Optional Pinned Model Strategy
 
-Model spesifik seperti `gpt-oss-20b` dan `Nemotron 3 Nano 30B A3B` **bukan** primary/fallback model yang wajib di-hardcode ke dalam arsitektur. Keduanya adalah **optional model candidates** yang dapat dipilih secara eksplisit (pinned) ketika deterministic model selection dibutuhkan (mis. demi konsistensi hasil saat demo) dan model tersebut tersedia pada provider/plan yang dikonfigurasi. Model-model ini **bukan router** — berbeda dari `openrouter/free` yang merupakan router yang memilih model secara dinamis.
+Specific models such as `gpt-oss-20b` and `Nemotron 3 Nano 30B A3B` are **not** primary/fallback models required to be hard-coded into the architecture. Both are **optional model candidates** that can be explicitly selected (pinned) when deterministic model selection is needed (e.g. for consistent results during a demo) and the model is available on the configured provider/plan. These models are **not routers** — unlike `openrouter/free`, which is a router that dynamically picks a model.
 
-Jika task-specific pinned model digunakan, ini adalah **optimisasi opsional**, bukan baseline arsitektur:
+If a task-specific pinned model is used, this is an **optional optimization**, not an architectural baseline:
 
 | AI Capability | Default Route | Optional Pinned Model |
 |---|---|---|
-| Topic/Subtopic Identification | `openrouter/free` | `gpt-oss-20b` bila tersedia |
-| Teach Me / Explanation | `openrouter/free` | `Nemotron 3 Nano 30B A3B` atau `gpt-oss-20b` bila tersedia |
-| Quiz Generation | `openrouter/free` | `gpt-oss-20b` bila tersedia |
-| Answer Evaluation | `openrouter/free` | `gpt-oss-20b` bila tersedia |
+| Topic/Subtopic Identification | `openrouter/free` | `gpt-oss-20b` if available |
+| Teach Me / Explanation | `openrouter/free` | `Nemotron 3 Nano 30B A3B` or `gpt-oss-20b` if available |
+| Quiz Generation | `openrouter/free` | `gpt-oss-20b` if available |
+| Answer Evaluation | `openrouter/free` | `gpt-oss-20b` if available |
 
-Baseline MVP tetap **`openrouter/free`** untuk seluruh capability di atas; pinned model bukan jaminan tersedia gratis selamanya, dan tidak mengubah baseline Tech Stack.
+The MVP baseline remains **`openrouter/free`** for all capabilities above; a pinned model is not guaranteed to remain free forever, and does not change the Tech Stack baseline.
 
 ### 11.5 Fallback Strategy
 
-Karena ketersediaan provider dan model dapat berubah, fallback logic **tidak** didefinisikan sebagai satu pasangan primary-model → fallback-model yang fixed (lihat juga §2.3). Sebagai gantinya, fallback dibedakan menjadi tiga level yang bersifat **configurable**, bukan hard-coded ke dalam business logic Laravel:
+Because provider and model availability can change, fallback logic is **not** defined as a single fixed primary-model → fallback-model pair (see also §2.3). Instead, fallback is split into three **configurable** levels, not hard-coded into Laravel's business logic:
 
-1. **Provider fallback** — apabila default provider (OpenRouter) tidak dapat diakses atau gagal, `ai_service` dapat dikonfigurasi untuk mencoba provider opsional (Featherless.ai) apabila tersedia dan dikonfigurasi.
-2. **Model fallback** — apabila implementasi menggunakan pinned model, model-level fallback dapat menggunakan model kompatibel lain pada provider yang sama (mis. `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`), sesuai konfigurasi.
-3. **Development fallback** — apabila tidak ada provider real yang dapat diakses (mis. selama local development/automated testing), `ai_service` menggunakan Mock AI Provider.
+1. **Provider fallback** — if the default provider (OpenRouter) cannot be reached or fails, `ai_service` can be configured to try the optional provider (Featherless.ai) if it is available and configured.
+2. **Model fallback** — if the implementation uses a pinned model, model-level fallback can use another compatible model on the same provider (e.g. `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`), per configuration.
+3. **Development fallback** — if no real provider is reachable (e.g. during local development/automated testing), `ai_service` uses the Mock AI Provider.
 
-Urutan ini berlaku identik untuk keempat capability yang menggunakan LLM (topic identification, explanation, quiz generation, answer evaluation) — tidak ada perbedaan strategi fallback per capability.
+This order applies identically to all four capabilities that use an LLM (topic identification, explanation, quiz generation, answer evaluation) — there is no per-capability difference in fallback strategy.
 
-### Kapan Fallback Dipicu
+### When Fallback Is Triggered
 
-- Timeout jaringan/response dari configured provider.
-- Provider error (5xx, connection error) dari configured provider.
-- **Tidak** dipicu oleh structured-output invalid semata — invalid shape ditangani dengan retry generation pada provider/model yang sedang aktif terlebih dahulu (lihat §2.3 Design Decision), baru berpindah ke fallback provider/model (jika dikonfigurasi) mengikuti diagram di §2.3.
+- Network/response timeout from the configured provider.
+- Provider error (5xx, connection error) from the configured provider.
+- **Not** triggered by invalid structured output alone — an invalid shape is first handled with a generation retry on the currently active provider/model (see the §2.3 Design Decision), and only then moves to the fallback provider/model (if configured), following the diagram in §2.3.
 
-### Kedua Opsi Gagal (Configured Provider dan Optional Fallback Sama-sama Gagal)
+### Both Options Fail (Configured Provider and Optional Fallback Both Fail)
 
-Ketika configured provider default (setelah retry sesuai policy) **dan** optional fallback provider/model (jika dikonfigurasi) sama-sama gagal dipanggil (provider unreachable/timeout), atau keduanya menghasilkan structured output invalid setelah masing-masing diberi retry generation sesuai policy:
+When the configured default provider (after retry per policy) **and** the optional fallback provider/model (if configured) both fail to be reached (provider unreachable/timeout), or both produce invalid structured output even after being given a generation retry per policy:
 
-| Capability | Perilaku |
+| Capability | Behavior |
 |---|---|
-| Topic/Subtopic Identification | Pipeline gagal total: transaction di-rollback, `materials.status = 'failed'`, `failed_reason` terisi. Response `422 Unprocessable Entity` (invalid structure) atau `503 Service Unavailable` (provider unreachable). Material tetap terlihat di My Materials untuk re-upload. |
-| Explanation | `503 Service Unavailable`. Tidak ada partial state untuk di-rollback karena capability ini tidak menulis database. |
-| Quiz Generation | `503 Service Unavailable` (atau `422` bila kegagalan berasal dari retrieval kosong sebelum LLM dipanggil sama sekali). Tidak ada quiz/quiz_questions yang dipersist. |
-| Answer Evaluation | `503 Service Unavailable`. **Tidak ada write** ke `quiz_answers`/`subtopics`/`quizzes` — Learning State sebelumnya tetap utuh. |
+| Topic/Subtopic Identification | The pipeline fails entirely: the transaction is rolled back, `materials.status = 'failed'`, `failed_reason` is populated. Response is `422 Unprocessable Entity` (invalid structure) or `503 Service Unavailable` (provider unreachable). The material remains visible in My Materials for re-upload. |
+| Explanation | `503 Service Unavailable`. There is no partial state to roll back because this capability does not write to the database. |
+| Quiz Generation | `503 Service Unavailable` (or `422` if the failure originates from empty retrieval before the LLM is called at all). No quiz/quiz_questions are persisted. |
+| Answer Evaluation | `503 Service Unavailable`. **No write** to `quiz_answers`/`subtopics`/`quizzes` — the prior Learning State remains intact. |
 
-Tidak ada percobaan di luar provider/model yang dikonfigurasi — menghindari over-engineering di luar keputusan final yang sudah ditetapkan pada Tech Stack Specification.
+There is no attempt beyond the configured provider/model — this avoids over-engineering beyond the final decision already made in the Tech Stack Specification.
 
 ### 11.6 Environment Configuration
 
-Provider dan model dikonfigurasi melalui environment variables, bukan hard-coded di dalam business logic:
+The provider and model are configured via environment variables, not hard-coded into the business logic:
 
 ```env
 AI_PROVIDER=openrouter
@@ -670,11 +670,11 @@ AI_MODEL=openrouter/free
 
 OPENROUTER_API_KEY=your_openrouter_api_key
 
-# Optional — hanya diperlukan jika Featherless.ai digunakan sebagai provider fallback/opsional
+# Optional — only needed if Featherless.ai is used as a fallback/optional provider
 FEATHERLESS_API_KEY=your_featherless_api_key
 ```
 
-Detail provider-specific (base URL, header autentikasi, format request/response) diisolasi di dalam implementation/configuration layer LLM Provider Abstraction (mis. per-provider adapter class di dalam `ai_service`), sehingga penggantian atau penambahan provider **tidak membutuhkan perubahan pada modul aplikasi** (Materials, Topics, Quiz, Learning State, dsb.) — hanya perubahan konfigurasi.
+Provider-specific detail (base URL, auth header, request/response format) is isolated inside the LLM Provider Abstraction's implementation/configuration layer (e.g. a per-provider adapter class inside `ai_service`), so swapping or adding a provider **requires no change to the application modules** (Materials, Topics, Quiz, Learning State, etc.) — only a configuration change.
 
 ---
 
@@ -682,11 +682,11 @@ Detail provider-specific (base URL, header autentikasi, format request/response)
 
 ### Chunk Selection
 
-Chunking dilakukan **deterministik oleh Laravel** (bukan AI) saat material diproses: fixed-length ~1.000 karakter dengan ~200 karakter overlap, tanpa heading detection (Database Design §10). Setiap chunk disimpan dengan `chunk_index` (urutan 0-based dalam material) dan, setelah topic identification berhasil, ditandai dengan `topic_id` (wajib) dan `subtopic_id` (opsional, nullable — lihat Database Design §4 Design Decision pada `chunks`).
+Chunking is done **deterministically by Laravel** (not AI) when a material is processed: fixed-length ~1,000 characters with ~200 characters of overlap, with no heading detection (Database Design §10). Each chunk is stored with a `chunk_index` (0-based order within the material) and, once topic identification succeeds, is tagged with `topic_id` (required) and `subtopic_id` (optional, nullable — see Database Design §4 Design Decision on `chunks`).
 
 ### Material/Topic/Subtopic Boundary
 
-Setiap interaksi AI di Workspace (Explanation maupun Quiz Generation) selalu terjadi dalam scope **satu material** dan, jika berlaku, **satu topic/subtopic** — mencerminkan model single-material session di Workspace (Architecture §8). Retrieval query yang sama dipakai di kedua capability:
+Every AI interaction in the Workspace (both Explanation and Quiz Generation) always occurs within the scope of **one material** and, where applicable, **one topic/subtopic** — reflecting the Workspace's single-material session model (Architecture §8). The same retrieval query is used for both capabilities:
 
 ```sql
 SELECT content FROM chunks
@@ -695,46 +695,46 @@ WHERE material_id = :material_id
 ORDER BY chunk_index ASC;
 ```
 
-Query ini didukung oleh index `idx_chunks_material_topic` dan `idx_chunks_material_subtopic` (Database Design §6) — tidak ada index tambahan di luar yang sudah didefinisikan.
+This query is backed by the `idx_chunks_material_topic` and `idx_chunks_material_subtopic` indexes (Database Design §6) — no additional index exists beyond what is already defined.
 
 ### Context Construction
 
-`ai_service` merangkai hasil filter (list of `content` string, sudah terurut sesuai `chunk_index`) menjadi satu blok "Retrieved Context" di dalam prompt (lihat §9). Tidak ada ranking/reranking tambahan — urutan chunk mengikuti urutan asli dalam material. Langkah ini sepenuhnya terjadi **sebelum** prompt diteruskan ke LLM Provider Abstraction, sehingga tidak bergantung pada provider/model mana yang sedang aktif.
+`ai_service` assembles the filter result (a list of `content` strings, already ordered by `chunk_index`) into a single "Retrieved Context" block within the prompt (see §9). There is no additional ranking/reranking — chunk order follows the original order within the material. This step happens entirely **before** the prompt is passed to the LLM Provider Abstraction, so it does not depend on which provider/model is currently active.
 
 ### Context Size Considerations
 
-Karena chunking sudah fixed-length (~1.000 karakter/chunk) dan retrieval dibatasi ke scope topic/subtopic (bukan seluruh material), jumlah chunk yang masuk ke satu prompt secara alami terbatas pada bagian material yang relevan dengan topic yang sedang dipelajari — bukan seluruh dokumen. Pengecualian: pada **Topic/Subtopic Identification**, seluruh chunked text material dikirim sekaligus (karena topic/subtopic belum ada untuk difilter), sesuai Architecture §7 yang menyebutkan tahap ini sebagai satu-satunya langkah AI dalam pipeline processing.
+Because chunking is already fixed-length (~1,000 characters/chunk) and retrieval is scoped to the topic/subtopic (not the entire material), the number of chunks that go into a single prompt is naturally limited to the portion of the material relevant to the topic currently being studied — not the whole document. Exception: for **Topic/Subtopic Identification**, the entire chunked text of the material is sent at once (because there are no topics/subtopics yet to filter by), per Architecture §7, which names this stage as the sole AI step in the processing pipeline.
 
-### Mencegah Konteks yang Tidak Relevan
+### Preventing Irrelevant Context
 
-- Prompt instruction secara eksplisit membatasi AI untuk menjawab **hanya** berdasarkan context chunks yang diberikan (§9.2), bukan pengetahuan umum di luar material (Architecture §8: *"the prompt instruction explicitly constrains the LLM to answer only using the provided context chunks"*).
-- Retrieval selalu di-scope ke `material_id` milik user yang sedang login — tidak pernah ada chunk dari material user lain yang masuk ke satu prompt (lihat §14, LLM data boundary).
-- Jika retrieval kosong untuk Quiz Generation, Laravel gagal **sebelum** memanggil LLM sama sekali (§7) — mencegah AI "mengarang" soal dari luar konteks.
+- The prompt instruction explicitly restricts the AI to answering **only** based on the given context chunks (§9.2), not general knowledge outside the material (Architecture §8: *"the prompt instruction explicitly constrains the LLM to answer only using the provided context chunks"*).
+- Retrieval is always scoped to the `material_id` owned by the currently logged-in user — chunks from another user's material never enter a single prompt (see §14, LLM data boundary).
+- If retrieval is empty for Quiz Generation, Laravel fails **before** calling the LLM at all (§7) — preventing the AI from "making up" questions outside the context.
 
-Tetap menggunakan PostgreSQL filtering — tidak ada vector database, embedding, atau similarity search di MVP ini, sesuai keputusan final. Penggantian provider/model AI **tidak** memperkenalkan kebutuhan retrieval baru apa pun.
+The system still uses PostgreSQL filtering — there is no vector database, embedding, or similarity search in this MVP, per the final decision. Swapping the AI provider/model does **not** introduce any new retrieval requirement.
 
 ---
 
 ## 13. AI Error Handling & Reliability
 
-| Kondisi | Perilaku |
+| Condition | Behavior |
 |---|---|
-| **Timeout** (configured provider tidak merespons dalam batas waktu) | Diperlakukan sama seperti provider failure: retry sesuai configured policy pada provider/route aktif, lalu optional fallback provider/model bila dikonfigurasi (§11). Jika seluruh opsi timeout → `503 Service Unavailable`. |
-| **Provider failure** (network error, 5xx dari configured provider) | Sama seperti timeout — retry → optional fallback → `503` jika seluruh opsi gagal. |
-| **Invalid structured output** (JSON valid secara sintaks tapi shape/field tidak sesuai schema §10) | Retry generation sesuai configured policy pada provider/model yang sedang aktif. Jika masih invalid → dianggap sebagai kegagalan tahap tersebut, lanjut ke optional fallback provider/model (jika dikonfigurasi dan belum dicoba) atau hard failure. |
-| **Empty response** (provider mengembalikan string kosong/null) | Diperlakukan sebagai invalid structured output (untuk capability terstruktur) atau kegagalan langsung (untuk Explanation, karena teks kosong bukan jawaban yang valid) → retry → optional fallback jika perlu. |
-| **Malformed JSON** (bukan JSON valid sama sekali — parse error) | Diperlakukan sebagai invalid structured output → retry → optional fallback jika perlu. |
-| **Default provider/route failure** (setelah retry sesuai configured policy pada `openrouter/free`) | Lanjut ke optional fallback provider/model (mis. Featherless.ai) jika dikonfigurasi; struktur invalid pada fallback juga diberi retry generation sesuai policy. |
-| **Fallback failure** (optional fallback provider/model juga gagal/invalid setelah retry, atau tidak ada fallback yang dikonfigurasi) | Hard failure — lihat tabel per-capability di §11.5 ("Kedua Opsi Gagal"). Tidak ada percobaan lebih lanjut di luar yang dikonfigurasi. |
+| **Timeout** (configured provider does not respond within the time limit) | Treated the same as a provider failure: retry per the configured policy on the active provider/route, then optionally fall back to another provider/model if configured (§11). If all options time out → `503 Service Unavailable`. |
+| **Provider failure** (network error, 5xx from the configured provider) | Same as timeout — retry → optional fallback → `503` if all options fail. |
+| **Invalid structured output** (syntactically valid JSON but the shape/fields do not match the §10 schema) | Retry generation per the configured policy on the currently active provider/model. If still invalid → treated as a failure of that stage, proceeding to the optional fallback provider/model (if configured and not yet tried) or a hard failure. |
+| **Empty response** (the provider returns an empty/null string) | Treated as invalid structured output (for structured capabilities) or an immediate failure (for Explanation, since empty text is not a valid answer) → retry → optional fallback if needed. |
+| **Malformed JSON** (not valid JSON at all — parse error) | Treated as invalid structured output → retry → optional fallback if needed. |
+| **Default provider/route failure** (after retry per the configured policy on `openrouter/free`) | Proceeds to the optional fallback provider/model (e.g. Featherless.ai) if configured; an invalid structure on the fallback is also given a generation retry per policy. |
+| **Fallback failure** (the optional fallback provider/model also fails/is invalid after retry, or no fallback is configured) | Hard failure — see the per-capability table in §11.5 ("Both Options Fail"). No further attempts beyond what is configured. |
 
-### Prinsip Utama: Tidak Ada Silent Corruption
+### Core Principle: No Silent Corruption
 
-Kegagalan AI **tidak pernah** menyebabkan:
-- Material berstatus `ready` dengan topic/subtopic/chunk yang sebagian (partial) — seluruh insert berada dalam satu transaction yang di-rollback penuh jika gagal (§5).
-- Quiz tersimpan dengan sebagian pertanyaan saja — insert `quizzes` + `quiz_questions` dalam satu transaction (§7).
-- `subtopics.mastery_score`/`status` berubah berdasarkan evaluasi yang gagal — jika evaluasi AI gagal, **tidak ada write sama sekali**, state lama tetap utuh (§8).
+An AI failure **never** causes:
+- A material to be `ready` with a partial set of topics/subtopics/chunks — all inserts sit within a single transaction that is fully rolled back on failure (§5).
+- A quiz to be stored with only some of its questions — `quizzes` + `quiz_questions` are inserted in a single transaction (§7).
+- `subtopics.mastery_score`/`status` to change based on a failed evaluation — if the AI evaluation fails, **there is no write at all**, and the prior state remains intact (§8).
 
-Ini adalah guiding principle yang eksplisit dari Architecture §13: *"never let an AI failure silently corrupt Learning State. When in doubt, the system fails visibly and leaves prior state untouched."* Kegagalan selalu dikembalikan ke frontend sebagai error state yang jelas (`422` atau `503`, lihat API Design §16), bukan disembunyikan atau ditutupi dengan data placeholder. Prinsip ini berlaku sama persis terlepas dari provider atau model mana yang dikonfigurasi.
+This is an explicit guiding principle from Architecture §13: *"never let an AI failure silently corrupt Learning State. When in doubt, the system fails visibly and leaves prior state untouched."* A failure is always returned to the frontend as a clear error state (`422` or `503`, see API Design §16), never hidden or papered over with placeholder data. This principle applies identically regardless of which provider or model is configured.
 
 ---
 
@@ -742,36 +742,36 @@ Ini adalah guiding principle yang eksplisit dari Architecture §13: *"never let 
 
 ### User Ownership
 
-Setiap material (dan seluruh data turunannya — `topics`, `subtopics`, `chunks`, `study_sessions`, `quizzes`, `quiz_questions`, `quiz_answers`) hanya dapat ditelusuri melalui foreign key chain yang berakhir di `materials.user_id`. `MaterialPolicy` memvalidasi `materials.user_id === auth()->id()` pada **setiap** request yang menyentuh material atau turunannya, sebelum data tersebut sempat masuk ke retrieval maupun prompt AI (Database Design §17; API Design §5, §17).
+Every material (and all data derived from it — `topics`, `subtopics`, `chunks`, `study_sessions`, `quizzes`, `quiz_questions`, `quiz_answers`) can only be traced through a foreign key chain that terminates at `materials.user_id`. `MaterialPolicy` validates `materials.user_id === auth()->id()` on **every** request that touches a material or its derived data, before that data ever reaches retrieval or an AI prompt (Database Design §17; API Design §5, §17).
 
 ### Context Isolation
 
-Retrieval selalu difilter dengan `material_id` milik material yang sudah lolos ownership check di atas — sehingga chunk yang masuk ke satu prompt AI **hanya pernah berasal dari satu material milik satu user yang sedang login** (§12).
+Retrieval is always filtered by the `material_id` of a material that has already passed the ownership check above — so the chunks entering a single AI prompt **only ever come from one material belonging to one currently logged-in user** (§12).
 
 ### Preventing Cross-User Data Retrieval
 
-Nested resource (`topics`, `subtopics`, `study_sessions`, `quizzes`, dst.) selalu di-load **melalui** relationship material pemiliknya (`$material->topics()->findOrFail($id)`), tidak pernah melalui lookup global by ID (API Design §5). Akibatnya, user A yang mencoba mengakses `studySession`/`quiz`/`quizQuestion` milik user B menerima `404 Not Found` — bukan `403`, agar tidak mengonfirmasi keberadaan resource tersebut (API Design §16) — dan tidak pernah sampai memicu pemanggilan `ai_service` dengan data milik user lain.
+Nested resources (`topics`, `subtopics`, `study_sessions`, `quizzes`, etc.) are always loaded **through** the owning material's relationship (`$material->topics()->findOrFail($id)`), never through a global lookup by ID (API Design §5). As a result, User A attempting to access a `studySession`/`quiz`/`quizQuestion` belonging to User B receives a `404 Not Found` — not a `403`, so as not to confirm the resource's existence (API Design §16) — and this never even triggers a call to `ai_service` with another user's data.
 
-### Validasi terhadap AI Output
+### Validation Against AI Output
 
-Setiap AI output (topic list, quiz questions, evaluation verdict) melewati dua lapis validasi sebelum dipersist atau dikembalikan ke frontend: validasi struktural di `ai_service` (§3) dan validasi bisnis di Application Module (§5–§8). Tidak ada AI output yang langsung dipersist tanpa validasi — terlepas dari provider/model yang menghasilkannya.
+Every AI output (topic list, quiz questions, evaluation verdict) passes through two validation layers before being persisted or returned to the frontend: structural validation in `ai_service` (§3) and business validation in the Application Module (§5–§8). No AI output is ever persisted directly without validation — regardless of the provider/model that produced it.
 
-### Laravel sebagai Final Authority
+### Laravel as Final Authority
 
-Laravel — bukan `ai_service`, bukan LLM, bukan provider tertentu — adalah satu-satunya pihak yang memutuskan apa yang dipersist ke PostgreSQL dan bagaimana Learning State dihitung. `ai_service` hanya mengembalikan data ke Application Module; ia tidak pernah menentukan hasil akhir aplikasi (Architecture §12: *"the backend is the only component allowed to decide what gets persisted"*).
+Laravel — not `ai_service`, not the LLM, not any specific provider — is the sole party that decides what gets persisted to PostgreSQL and how the Learning State is computed. `ai_service` only returns data to the Application Module; it never determines the application's final outcome (Architecture §12: *"the backend is the only component allowed to decide what gets persisted"*).
 
-### Frontend Tidak Pernah Memanggil External LLM Provider Langsung
+### The Frontend Never Calls an External LLM Provider Directly
 
-React SPA hanya berbicara dengan Laravel REST API. Tidak ada endpoint, credential, atau URL provider (OpenRouter, Featherless.ai, maupun Mock) yang pernah diekspos ke frontend. Seluruh empat AI capability hanya dapat dipicu melalui endpoint Laravel yang sudah diautentikasi dan di-ownership-check (`POST /api/materials`, `POST /api/study-sessions/{studySession}/explanations`, `POST /api/study-sessions/{studySession}/quizzes`, `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`).
+The React SPA only talks to the Laravel REST API. No endpoint, credential, or provider URL (OpenRouter, Featherless.ai, or Mock) is ever exposed to the frontend. All four AI capabilities can only be triggered through authenticated, ownership-checked Laravel endpoints (`POST /api/materials`, `POST /api/study-sessions/{studySession}/explanations`, `POST /api/study-sessions/{studySession}/quizzes`, `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`).
 
-### Tambahan: Raw AI Output Tidak Pernah Dikembalikan ke Frontend
+### Additional: Raw AI Output Is Never Returned to the Frontend
 
-- `correct_answer` pada quiz questions tidak pernah dikirim ke frontend sebelum grading (di-strip dari response `POST /api/study-sessions/{studySession}/quizzes`).
-- Response quiz generation dan topic identification selalu berupa hasil yang **sudah divalidasi dan dipersist** (memuat `id` dari database), bukan JSON mentah dari provider manapun.
+- `correct_answer` on quiz questions is never sent to the frontend before grading (it is stripped from the `POST /api/study-sessions/{studySession}/quizzes` response).
+- The quiz generation and topic identification responses are always **already-validated and persisted** results (containing an `id` from the database), never raw JSON from any provider.
 
 ### API Key & Credential Isolation
 
-Seluruh API key provider (`OPENROUTER_API_KEY`, `FEATHERLESS_API_KEY`) disimpan sebagai environment variable server-side, tidak pernah di-hard-code, dan tidak pernah diekspos ke frontend maupun response API. LLM Provider Abstraction adalah satu-satunya bagian dari `ai_service` yang membaca credential ini (§11.6).
+All provider API keys (`OPENROUTER_API_KEY`, `FEATHERLESS_API_KEY`) are stored as server-side environment variables, never hard-coded, and never exposed to the frontend or an API response. The LLM Provider Abstraction is the only part of `ai_service` that reads these credentials (§11.6).
 
 ---
 
@@ -779,38 +779,38 @@ Seluruh API key provider (`OPENROUTER_API_KEY`, `FEATHERLESS_API_KEY`) disimpan 
 
 | AI Capability | Laravel Module | `ai_service` Method/Responsibility | DB Effect |
 |---|---|---|---|
-| Topic/Subtopic Identification | **Processing Module** (dipanggil dari `POST /api/materials`) | `identifyTopics($chunkedText)` — prompt construction, invoke configured LLM provider melalui `ai_service` / LLM Provider Abstraction, validasi shape `{name, description, subtopics[]}` | `INSERT topics`, `INSERT subtopics`, `INSERT chunks` (dengan tagging), `UPDATE materials.status` — 1 transaction |
-| Teach Me / Explanation | **Study Session Module** (dipanggil dari `POST /api/study-sessions/{studySession}/explanations`) | `explain($contextChunks, $intent, $message)` — prompt construction, invoke configured LLM provider melalui `ai_service` / LLM Provider Abstraction, tanpa validasi shape (teks bebas) | Tidak ada (read-only retrieval saja) |
-| Quiz Generation | **Quiz Module** (dipanggil dari `POST /api/study-sessions/{studySession}/quizzes`) | `generateQuiz($contextChunks, $difficulty, $questionCount)` — prompt construction, invoke configured LLM provider melalui `ai_service` / LLM Provider Abstraction, validasi shape array questions | `INSERT quizzes`, `INSERT quiz_questions` — 1 transaction |
-| Answer Evaluation | **Quiz Module** (dipanggil dari `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`), hasil diteruskan ke **Learning State Module** | `evaluateAnswer($questionText, $correctAnswer, $submittedAnswer)` — prompt construction, invoke configured LLM provider melalui `ai_service` / LLM Provider Abstraction, validasi shape `{is_correct, feedback}` | `INSERT quiz_answers`, `UPDATE subtopics.mastery_score/status`, `UPDATE quizzes` (conditional) — 1 transaction |
+| Topic/Subtopic Identification | **Processing Module** (invoked from `POST /api/materials`) | `identifyTopics($chunkedText)` — prompt construction, invoke the configured LLM provider through `ai_service` / LLM Provider Abstraction, validate the `{name, description, subtopics[]}` shape | `INSERT topics`, `INSERT subtopics`, `INSERT chunks` (with tagging), `UPDATE materials.status` — 1 transaction |
+| Teach Me / Explanation | **Study Session Module** (invoked from `POST /api/study-sessions/{studySession}/explanations`) | `explain($contextChunks, $intent, $message)` — prompt construction, invoke the configured LLM provider through `ai_service` / LLM Provider Abstraction, no shape validation (free text) | None (retrieval only, read-only) |
+| Quiz Generation | **Quiz Module** (invoked from `POST /api/study-sessions/{studySession}/quizzes`) | `generateQuiz($contextChunks, $difficulty, $questionCount)` — prompt construction, invoke the configured LLM provider through `ai_service` / LLM Provider Abstraction, validate the questions array shape | `INSERT quizzes`, `INSERT quiz_questions` — 1 transaction |
+| Answer Evaluation | **Quiz Module** (invoked from `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`), result forwarded to the **Learning State Module** | `evaluateAnswer($questionText, $correctAnswer, $submittedAnswer)` — prompt construction, invoke the configured LLM provider through `ai_service` / LLM Provider Abstraction, validate the `{is_correct, feedback}` shape | `INSERT quiz_answers`, `UPDATE subtopics.mastery_score/status`, `UPDATE quizzes` (conditional) — 1 transaction |
 
-Tidak ada module lain (Materials, Auth, Topics-read-path) yang pernah memanggil `ai_service` — persis sesuai Architecture §5: *"only Study Session and Processing call AI Orchestration."* (Quiz berada di bawah payung Study Session pada level routing API, namun secara modular tetap dipetakan sebagai Quiz Module sesuai Architecture §5 module table.)
+No other module (Materials, Auth, Topics-read-path) ever calls `ai_service` — exactly per Architecture §5: *"only Study Session and Processing call AI Orchestration."* (Quiz falls under the Study Session umbrella at the API routing level, but is still mapped modularly as the Quiz Module per the Architecture §5 module table.)
 
 ---
 
 ## 16. Final AI Architecture Summary
 
-### Ringkasan
+### Summary
 
-Studyback menggunakan AI secara sempit dan terkontrol: empat capability reasoning (identify topics, explain, generate quiz, evaluate answer), semuanya dipanggil melalui satu in-process Laravel service (`ai_service`) yang tidak pernah menulis database dan tidak pernah diekspos sebagai endpoint terpisah. `ai_service` bersifat **provider-agnostic**: setiap panggilan AI mengikuti pola yang sama — retrieval (kecuali topic identification) → prompt construction tiga bagian → LLM Provider Abstraction → configured provider (default: OpenRouter `openrouter/free`; optional: Featherless.ai; dev/test: Mock AI Provider) dengan retry sesuai configured policy dan optional fallback provider/model → validasi structured output (kecuali Explanation) → Application Module memproses hasil secara deterministik → PostgreSQL. Model spesifik seperti `gpt-oss-20b` dan `Nemotron 3 Nano 30B A3B` tersedia sebagai optional pinned-model candidates, bukan dependency arsitektur permanen. Learning State (`subtopics.mastery_score`/`status`) selalu dihitung dan dimiliki Laravel, tidak pernah oleh LLM atau provider tertentu. Kegagalan AI di titik manapun tidak pernah menghasilkan state yang korup — sistem selalu gagal secara eksplisit (`422`/`503`) dan meninggalkan data sebelumnya utuh.
+Studyback uses AI narrowly and in a controlled way: four reasoning capabilities (identify topics, explain, generate quiz, evaluate answer), all invoked through a single in-process Laravel service (`ai_service`) that never writes to the database and is never exposed as a separate endpoint. `ai_service` is **provider-agnostic**: every AI call follows the same pattern — retrieval (except for topic identification) → three-part prompt construction → LLM Provider Abstraction → configured provider (default: OpenRouter `openrouter/free`; optional: Featherless.ai; dev/test: Mock AI Provider) with retry per the configured policy and an optional fallback provider/model → structured output validation (except for Explanation) → the Application Module processes the result deterministically → PostgreSQL. Specific models such as `gpt-oss-20b` and `Nemotron 3 Nano 30B A3B` are available as optional pinned-model candidates, not a permanent architectural dependency. The Learning State (`subtopics.mastery_score`/`status`) is always computed and owned by Laravel, never by the LLM or any specific provider. An AI failure at any point never produces corrupted state — the system always fails explicitly (`422`/`503`) and leaves prior data intact.
 
-Arsitektur ini konsisten end-to-end dengan System Architecture Blueprint (modular monolith, AI Orchestrator in-process, RAG filter-based tanpa vector DB), Database Design Document (tidak ada tabel `ai_service`, Learning State sebagai kolom `subtopics`, transaction boundaries di §15 DDD), API Design Document (empat endpoint yang melibatkan AI, error handling `422`/`503`), dan Tech Stack Specification terkini (`ai_service` sebagai provider-agnostic AI abstraction; OpenRouter `openrouter/free` sebagai default provider/route; Featherless.ai sebagai optional provider; Mock AI Provider untuk development/testing; provider/model dikonfigurasi melalui environment variables) — tidak ditemukan kontradiksi pada ai_service, provider/model strategy, retrieval, chunking, Learning State, database ownership, AI capabilities, maupun API flow.
+This architecture is consistent end-to-end with the System Architecture Blueprint (modular monolith, in-process AI Orchestrator, filter-based RAG with no vector DB), the Database Design Document (no `ai_service` table, Learning State as `subtopics` columns, transaction boundaries in DDD §15), the API Design Document (four AI-involved endpoints, `422`/`503` error handling), and the latest Tech Stack Specification (`ai_service` as a provider-agnostic AI abstraction; OpenRouter `openrouter/free` as the default provider/route; Featherless.ai as an optional provider; Mock AI Provider for development/testing; provider/model configured via environment variables) — no contradictions were found regarding ai_service, provider/model strategy, retrieval, chunking, Learning State, database ownership, AI capabilities, or API flow.
 
 ### Implementation Checklist
 
-- [ ] `ai_service` diimplementasikan sebagai Laravel service class in-process (`AiOrchestrator.php` atau setara), dengan empat method publik: `identifyTopics()`, `explain()`, `generateQuiz()`, `evaluateAnswer()` — signature method tidak mengandung parameter provider/model.
-- [ ] LLM Provider Abstraction diimplementasikan di dalam `ai_service` (mis. per-provider adapter class), dengan implementasi minimal untuk OpenRouter (default), Featherless.ai (optional), dan Mock AI Provider (dev/test).
-- [ ] Konfigurasi provider/model dibaca dari environment variables (`AI_PROVIDER`, `AI_MODEL`, `OPENROUTER_API_KEY`, `FEATHERLESS_API_KEY` optional) — lihat §11.6 — bukan di-hardcode di business logic.
-- [ ] Default route `openrouter/free` digunakan sebagai baseline untuk seluruh empat capability, sesuai Tech Stack Specification.
-- [ ] Retry sesuai configured policy diimplementasikan pada provider/route aktif sebelum optional fallback, untuk seluruh empat capability, mengikuti flow di §2.3.
-- [ ] Structured-output validator terpisah per capability (topic identification, quiz generation, answer evaluation), memvalidasi schema di §10 sebelum data dikembalikan ke Application Module, independen dari provider/model.
-- [ ] Explanation **tidak** melalui structured-output validator — hanya dicek non-empty.
-- [ ] Processing Module memanggil `ai_service->identifyTopics()` di dalam `POST /api/materials`, lalu melakukan tagging chunk & persist dalam satu `DB::transaction()`.
-- [ ] Study Session Module memanggil `ai_service->explain()` di dalam `POST /api/study-sessions/{studySession}/explanations`, tanpa persistence.
-- [ ] Quiz Module memanggil `ai_service->generateQuiz()` di dalam `POST /api/study-sessions/{studySession}/quizzes`, dengan pre-check retrieval kosong sebelum memanggil AI, lalu persist quiz + questions dalam satu transaction.
-- [ ] Quiz Module memanggil `ai_service->evaluateAnswer()` di dalam `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`, lalu Learning State Module menghitung ulang `mastery_score`/`status` dan Laravel mempersist seluruhnya dalam satu transaction.
-- [ ] Retrieval query filter (`material_id` + `topic_id`/`subtopic_id`, `ORDER BY chunk_index`) diimplementasikan sebagai fungsi internal, menggunakan index `idx_chunks_material_topic`/`idx_chunks_material_subtopic` — tidak diekspos sebagai route.
-- [ ] Ownership check (`MaterialPolicy`) dijalankan sebelum retrieval/AI call apa pun terjadi pada seluruh empat endpoint AI-involved.
-- [ ] `correct_answer` di-strip dari setiap response quiz sebelum dikirim ke frontend.
-- [ ] Error handling mengembalikan `422` (validation/insufficient-context/invalid-structure setelah retry & fallback habis) atau `503` (seluruh configured provider/model unreachable), tanpa partial write ke database, sesuai §13.
-- [ ] Tidak ada tabel, queue, cache, vector store, atau endpoint tambahan dibuat khusus untuk AI di luar yang sudah dispesifikasikan di dokumen ini dan source documents.
+- [ ] `ai_service` is implemented as an in-process Laravel service class (`AiOrchestrator.php` or equivalent), with four public methods: `identifyTopics()`, `explain()`, `generateQuiz()`, `evaluateAnswer()` — the method signatures contain no provider/model parameter.
+- [ ] The LLM Provider Abstraction is implemented inside `ai_service` (e.g. a per-provider adapter class), with a minimal implementation for OpenRouter (default), Featherless.ai (optional), and the Mock AI Provider (dev/test).
+- [ ] Provider/model configuration is read from environment variables (`AI_PROVIDER`, `AI_MODEL`, `OPENROUTER_API_KEY`, `FEATHERLESS_API_KEY` optional) — see §11.6 — not hard-coded in the business logic.
+- [ ] The default route `openrouter/free` is used as the baseline for all four capabilities, per the Tech Stack Specification.
+- [ ] Retry per the configured policy is implemented on the active provider/route before the optional fallback, for all four capabilities, following the flow in §2.3.
+- [ ] A separate structured-output validator per capability (topic identification, quiz generation, answer evaluation) validates the schema in §10 before data is returned to the Application Module, independent of provider/model.
+- [ ] Explanation does **not** go through the structured-output validator — only a non-empty check.
+- [ ] The Processing Module calls `ai_service->identifyTopics()` inside `POST /api/materials`, then performs chunk tagging & persistence in a single `DB::transaction()`.
+- [ ] The Study Session Module calls `ai_service->explain()` inside `POST /api/study-sessions/{studySession}/explanations`, with no persistence.
+- [ ] The Quiz Module calls `ai_service->generateQuiz()` inside `POST /api/study-sessions/{studySession}/quizzes`, with an empty-retrieval pre-check before calling the AI, then persists the quiz + questions in a single transaction.
+- [ ] The Quiz Module calls `ai_service->evaluateAnswer()` inside `POST /api/quizzes/{quiz}/questions/{quizQuestion}/answer`, then the Learning State Module recomputes `mastery_score`/`status` and Laravel persists everything in a single transaction.
+- [ ] The retrieval query filter (`material_id` + `topic_id`/`subtopic_id`, `ORDER BY chunk_index`) is implemented as an internal function, using the `idx_chunks_material_topic`/`idx_chunks_material_subtopic` index — not exposed as a route.
+- [ ] The ownership check (`MaterialPolicy`) runs before any retrieval/AI call on all four AI-involved endpoints.
+- [ ] `correct_answer` is stripped from every quiz response before it is sent to the frontend.
+- [ ] Error handling returns `422` (validation/insufficient-context/invalid-structure after retry & fallback are exhausted) or `503` (all configured providers/models unreachable), with no partial write to the database, per §13.
+- [ ] No table, queue, cache, vector store, or additional endpoint is created specifically for AI beyond what is already specified in this document and the source documents.

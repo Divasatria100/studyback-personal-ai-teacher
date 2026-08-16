@@ -17,30 +17,30 @@
 
 # Studyback — Turn Your Old Study Materials Into a Personal AI Teacher
 
-## 1. Ringkasan Produk
+## 1. Product Summary
 
 ### 1.1 Problem
 
-Mahasiswa sering ingin mempelajari kembali materi kuliah yang sudah lama dipelajari, tetapi materi tersebut tersebar di berbagai PDF, slide, dan catatan. Ketika kembali belajar, mereka harus menentukan sendiri apa yang perlu dipelajari, meminta penjelasan, mencari latihan soal, dan menilai sendiri apakah mereka benar-benar sudah memahami materi tersebut.
+Students often want to revisit course material they studied long ago, but that material is scattered across various PDFs, slides, and notes. When they return to study, they have to decide for themselves what to learn, ask for explanations, find practice questions, and assess on their own whether they truly understand the material.
 
 ### 1.2 Solution
 
-Studyback adalah AI personal teacher yang mengubah materi pembelajaran milik pengguna menjadi pengalaman belajar adaptif.
+Studyback is an AI personal teacher that turns the user's own study material into an adaptive learning experience.
 
-Pengguna cukup mengunggah materi pembelajaran, kemudian Studyback memahami dan mengorganisasi materi tersebut ke dalam Material Library. Ketika pengguna ingin kembali belajar di kemudian hari, mereka dapat memilih materi yang pernah diunggah, melihat informasi dan topik yang tersedia, lalu memulai Adaptive Study Session.
+Users simply upload their study material, then Studyback understands and organizes it into the Material Library. When users want to study again later, they can select material they have uploaded before, view the available information and topics, and start an Adaptive Study Session.
 
-Studyback dapat:
+Studyback can:
 
-- Menjelaskan konsep
-- Menyederhanakan materi
-- Menguji pemahaman melalui quiz
-- Mengevaluasi jawaban
-- Mengidentifikasi topik yang masih lemah
-- Mengarahkan pengguna untuk mempelajarinya kembali
+- Explain concepts
+- Simplify material
+- Test understanding through quizzes
+- Evaluate answers
+- Identify weak topics
+- Guide users to re-learn them
 
 ### 1.3 Core Product Principle
 
-Studyback bukan sekadar chatbot yang menjawab pertanyaan tentang materi. Studyback adalah:
+Studyback is not just a chatbot that answers questions about the material. Studyback is:
 
 > "An AI teacher that understands your study material, teaches you, tests you, identifies what you don't understand, and guides you back to what you need to learn."
 
@@ -58,34 +58,34 @@ Material → Study Session → Learning State → Personalized Review
 
 ### 1.4 Why Interesting?
 
-Berbeda dari chatbot belajar yang hanya menunggu pertanyaan pengguna, Studyback menjalankan learning loop di atas secara aktif — sistem tidak hanya menjawab pertanyaan, tetapi menggunakan hasil interaksi pengguna untuk menentukan apa yang perlu dipelajari selanjutnya.
+Unlike study chatbots that merely wait for user questions, Studyback actively runs the learning loop above — the system does not only answer questions, but uses the results of user interactions to determine what should be learned next.
 
-Materi belajar berasal dari dokumen pengguna sendiri, sehingga pengalaman belajar tetap berfokus pada konteks dan kurikulum yang mereka gunakan.
+The study material comes from the user's own documents, so the learning experience remains focused on the context and curriculum they use.
 
-Studyback juga menyimpan materi dan learning state pengguna sehingga proses belajar tidak berhenti setelah satu sesi. Pengguna dapat kembali ke materi yang sama di kemudian hari dan melanjutkan proses belajar berdasarkan progress sebelumnya.
+Studyback also stores the user's material and learning state so that the learning process does not stop after a single session. Users can return to the same material later and continue the learning process based on their previous progress.
 
 ### 1.5 AI Role
 
-AI digunakan untuk:
+AI is used to:
 
-- Memahami materi pengguna
-- Mengidentifikasi topic/concept
-- Menghasilkan penjelasan yang adaptif dan menyederhanakan konsep sesuai kebutuhan pengguna
-- Membuat pertanyaan/quiz berdasarkan materi
-- Mengevaluasi jawaban pengguna dan memberikan feedback
-- Menentukan konsep yang perlu dipelajari kembali
+- Understand the user's material
+- Identify topics/concepts
+- Generate adaptive explanations and simplify concepts according to the user's needs
+- Create questions/quizzes based on the material
+- Evaluate user answers and provide feedback
+- Determine concepts that need to be re-learned
 
 ### 1.6 Target User
 
-Mahasiswa yang ingin mempelajari kembali materi kuliah yang pernah mereka pelajari, terutama menjelang ujian atau saat melakukan revisi terhadap semester sebelumnya.
+Students who want to revisit course material they have studied before, especially before exams or when reviewing previous semesters.
 
-Konsep ini dapat diperluas ke siswa atau karyawan untuk kebutuhan pembelajaran dan knowledge refresh di masa depan.
+This concept can be extended to students or employees for learning and knowledge refresh needs in the future.
 
 ---
 
-## 2. Product Flow (Ringkasan Menyeluruh)
+## 2. Product Flow (Overall Summary)
 
-Studyback memiliki dua jalur utama tergantung apakah pengguna mengunggah materi baru atau membuka materi yang sudah ada.
+Studyback has two main paths depending on whether the user uploads new material or opens existing material.
 
 **NEW MATERIAL FLOW**
 
@@ -117,39 +117,39 @@ Study Session Configuration
 Studyback Workspace
 ```
 
-**Alur lengkap setelah sesi belajar selesai:**
+**Complete flow after a study session ends:**
 
 ```
 Studyback Workspace
   ↓
 Learn → Test → Evaluate → Weak Topic Detection → Review
   ↓
-Learning State diperbarui
+Learning State updated
   ↓
-Kembali ke My Materials
+Return to My Materials
   ↓
-User dapat melanjutkan belajar di kemudian hari
+User can continue studying later
 ```
 
 ---
 
 ## 3. Home
 
-Home adalah entry point utama, terutama untuk pengguna baru atau pengguna yang ingin langsung mempelajari materi baru. Home **tidak** menjalankan learning session — Home hanya menangani proses dari upload hingga materi siap dipelajari.
+Home is the main entry point, especially for new users or users who want to study new material right away. Home does **not** run a learning session — Home only handles the process from upload until the material is ready to study.
 
 **Layout:**
 
-- Hero besar di kiri — menangani seluruh upload flow
-- Profile di kanan atas
-- Recent Materials di bawah Profile (tetap berada di area samping Hero), menampilkan ± 5 materi terbaru, dengan tautan **See More / View All** menuju My Materials
+- Large hero on the left — handles the entire upload flow
+- Profile at the top right
+- Recent Materials below the Profile (staying in the side area next to the Hero), showing the ± 5 most recent materials, with a **See More / View All** link to My Materials
 
-Jika pengguna belum login:
-- Profile → konten blur + glass overlay + tombol Login
-- Recent Materials → tidak membocorkan materi pengguna, gunakan empty/private state
+If the user is not logged in:
+- Profile → blurred content + glass overlay + Login button
+- Recent Materials → does not leak the user's material, use an empty/private state
 
-Visual mengikuti arah glassmorphism: soft gradient, translucent glass, rounded container, subtle border/glow, typography besar, dan primary button yang solid/kontras.
+The visual follows a glassmorphism direction: soft gradient, translucent glass, rounded container, subtle border/glow, large typography, and a solid/contrasting primary button.
 
-**Upload Flow (di dalam Hero):**
+**Upload Flow (inside the Hero):**
 
 ```
 Upload Material
@@ -169,7 +169,7 @@ Material Ready ✓
 Studyback Workspace
 ```
 
-Contoh state setelah materi selesai diproses:
+Example state after the material has been processed:
 
 ```
 Material Ready ✓
@@ -180,25 +180,25 @@ Object Oriented Programming
 [Start Learning]
 ```
 
-Setelah **Start Learning** ditekan, user langsung diarahkan ke Studyback Workspace dan proses belajar dimulai di sana.
+Once **Start Learning** is pressed, the user is taken directly to the Studyback Workspace and the learning process begins there.
 
 ---
 
 ## 4. My Materials (Material Library)
 
-My Materials bertanggung jawab hanya untuk:
+My Materials is responsible only for:
 
-- Melihat, mencari, dan memfilter materi yang pernah diunggah
-- Memilih materi (material card) untuk dibuka
-- Membuka Material Detail
+- Viewing, searching, and filtering previously uploaded materials
+- Selecting a material (material card) to open
+- Opening Material Detail
 
-**Upload bukan flow utama di halaman ini.** Upload tetap dilakukan melalui Home. Jika tombol **[+ Upload Material]** ditampilkan di sini, tombol tersebut hanya berfungsi sebagai shortcut yang mengarahkan user kembali ke Home untuk melakukan proses upload:
+**Upload is not the main flow on this page.** Upload is still done through Home. If the **[+ Upload Material]** button is shown here, it only serves as a shortcut that directs the user back to Home to perform the upload process:
 
 ```
 My Materials → [+ Upload Material] → Home → Upload Material
 ```
 
-Jika user belum memiliki materi, tampilkan empty state:
+If the user does not have any material yet, show an empty state:
 
 ```
 No materials yet
@@ -206,18 +206,18 @@ No materials yet
 Upload your first study material and let Studyback
 become your personal AI teacher.
 
-[Upload Material] → mengarah ke Home
+[Upload Material] → navigates to Home
 ```
 
-My Materials tidak menjalankan proses learning session apa pun — halaman ini murni tempat memilih materi sebelum masuk ke Material Detail.
+My Materials does not run any learning session process — this page is purely a place to select material before entering Material Detail.
 
 ---
 
 ## 5. Material Detail
 
-Ketika pengguna memilih material card, pengguna tidak langsung masuk ke Study Session — mereka terlebih dahulu melihat halaman detail materi.
+When the user selects a material card, they do not enter the Study Session directly — they first see the material detail page.
 
-**Isi Material Detail:**
+**Material Detail contents:**
 
 *Material Information*
 - Material name/title
@@ -229,14 +229,14 @@ Ketika pengguna memilih material card, pengguna tidak langsung masuk ke Study Se
 - Topic/concept list
 
 *Learning Progress*
-- Overall mastery (jika materi sudah pernah dipelajari)
-- Not Started (jika belum pernah dipelajari)
+- Overall mastery (if the material has been studied before)
+- Not Started (if it has never been studied)
 
 *Actions*
 - Download Material
 - Start Study Session (primary action)
 
-Material Detail **tidak** menjalankan proses pembelajaran, quiz, review, atau chat AI — halaman ini murni informasi dan entry point menuju Study Session. Seluruh proses pembelajaran terjadi di Studyback Workspace.
+Material Detail does **not** run any learning, quiz, review, or AI chat process — this page is purely informational and serves as the entry point to the Study Session. All learning processes happen in the Studyback Workspace.
 
 ```
 Material Detail
@@ -252,23 +252,23 @@ Studyback Workspace
 
 ## 6. Study Session Configuration
 
-Sebelum memulai sesi, pengguna dapat mengatur cara mereka ingin belajar. Untuk menjaga scope tetap realistis dalam hackathon 48 jam, **Study Session Configuration bukan halaman/destination baru**, melainkan modal/dialog/overlay ringan yang muncul sebelum masuk ke Studyback Workspace.
+Before starting a session, users can configure how they want to study. To keep the scope realistic within a 48-hour hackathon, **Study Session Configuration is not a new page/destination**, but a lightweight modal/dialog/overlay that appears before entering the Studyback Workspace.
 
-**Opsi konfigurasi:**
+**Configuration options:**
 
-- **Topics** — topic/concept mana yang ingin dipelajari
+- **Topics** — which topic/concept to study
 - **Learning Mode** — Teach Me / Quiz Me / Review Weak Topics / Guided Study Session
 - **Difficulty** — Easy / Medium / Hard
 
-Guided Study Session adalah mode utama yang menjalankan learning loop penuh (Learn → Test → Evaluate → Review).
+Guided Study Session is the main mode that runs the full learning loop (Learn → Test → Evaluate → Review).
 
 ---
 
 ## 7. Studyback Workspace
 
-Studyback Workspace adalah **satu-satunya tempat** di mana actual learning experience berlangsung. Semua mode belajar — Teach Me, Quiz Me, Review Weak Topics, Guided Study Session — tetap berada dalam satu workspace yang sama; tidak ada halaman terpisah seperti `/teach`, `/quiz`, atau `/review`.
+The Studyback Workspace is the **only place** where the actual learning experience takes place. All learning modes — Teach Me, Quiz Me, Review Weak Topics, Guided Study Session — remain within the same workspace; there are no separate pages such as `/teach`, `/quiz`, or `/review`.
 
-Studyback Workspace diakses melalui salah satu dari dua jalur berikut:
+The Studyback Workspace is accessed through one of the following two paths:
 
 ```
 Home → Upload Material → Material Ready → Start Learning → Studyback Workspace
@@ -279,39 +279,39 @@ My Materials → Material Detail → Start Study Session → Study Session Confi
 
 ### 7.1 Dual Interaction Model
 
-Workspace menggabungkan dua jenis interface dalam satu ruang yang sama, sehingga pengguna tidak merasa berpindah aplikasi:
+The workspace combines two types of interfaces in the same space, so users do not feel like they are switching applications:
 
-**Conversational Interface** (digunakan oleh Teach Me & Review Weak Topics)
+**Conversational Interface** (used by Teach Me & Review Weak Topics)
 - Explanation
 - Follow-up questions
 - Socratic questioning
 
-**Structured Interface** (digunakan oleh Quiz Me)
+**Structured Interface** (used by Quiz Me)
 - Multiple choice
 - True/False
 - Short answer
 - Quiz results
 
-Quiz secara khusus menggunakan structured UI, bukan chat bubble biasa — namun tetap berada di workspace yang sama.
+Quiz specifically uses a structured UI, not ordinary chat bubbles — but it still remains within the same workspace.
 
 ### 7.2 Learning Modes
 
 **Teach Me**
-Menggunakan conversational interface. AI menjelaskan topic/concept berdasarkan materi yang dipilih, dapat menyederhanakan penjelasan, memberi contoh, dan menjawab pertanyaan lanjutan.
+Uses the conversational interface. The AI explains the topic/concept based on the selected material, can simplify explanations, give examples, and answer follow-up questions.
 
-Contoh:
+Example:
 ```
 User: "Teach me polymorphism."
-Studyback: [menjelaskan polymorphism berdasarkan materi user]
+Studyback: [explains polymorphism based on the user's material]
 
-User dapat melanjutkan dengan:
+User can continue with:
 - Explain simpler
 - Give example
 - Quiz me
 ```
 
 **Quiz Me**
-Menggunakan structured quiz interface.
+Uses the structured quiz interface.
 
 ```
 Quiz — Polymorphism
@@ -326,7 +326,7 @@ Which statement best explains polymorphism?
 [Submit Answer]
 ```
 
-Setelah user menjawab, AI mengevaluasi jawaban, menentukan benar/salah, memberikan feedback, menyimpan hasil quiz, dan memperbarui topic mastery.
+After the user answers, the AI evaluates the answer, determines correct/incorrect, provides feedback, stores the quiz result, and updates topic mastery.
 
 ```
 Quiz Complete ✓
@@ -341,10 +341,10 @@ Topic Performance:
 [Review Weak Topics]   [Try Quiz Again]
 ```
 
-Hasil quiz ditampilkan sebagai summary dengan aksi yang jelas — workspace **tidak** berpindah tampilan secara otomatis/agresif setelah quiz selesai.
+The quiz result is shown as a summary with clear actions — the workspace does **not** switch views automatically/aggressively after the quiz ends.
 
 **Review Weak Topics**
-Menggunakan learning state yang dihasilkan dari quiz dan interaksi sebelumnya. Topic/subtopic dengan mastery rendah ditandai **Needs Review**.
+Uses the learning state generated from quizzes and previous interactions. Topics/subtopics with low mastery are marked **Needs Review**.
 
 ```
 Polymorphism
@@ -353,16 +353,16 @@ Needs Review
 [Review]
 ```
 
-Ketika user menekan Review:
-- Studyback otomatis memfokuskan AI Teacher pada topic/subtopic tersebut
-- AI menjelaskan kembali dengan pendekatan berbeda, memberi contoh, dan dapat meminta user menjelaskan ulang konsep tersebut
-- AI memberikan mini-question atau re-test
-- Learning state diperbarui berdasarkan hasil review
+When the user presses Review:
+- Studyback automatically focuses the AI Teacher on that topic/subtopic
+- The AI explains it again with a different approach, gives examples, and can ask the user to re-explain the concept
+- The AI gives a mini-question or re-test
+- The learning state is updated based on the review results
 
-Review tidak membuka halaman baru — user tetap berada di Studyback Workspace.
+Review does not open a new page — the user stays in the Studyback Workspace.
 
 **Guided Study Session (Primary Mode)**
-Mode utama yang menggabungkan seluruh learning loop dalam satu workspace:
+The main mode that combines the entire learning loop in one workspace:
 
 ```
 Guided Study Session
@@ -384,11 +384,11 @@ Re-test
 Updated Mastery
 ```
 
-AI menentukan kapan user perlu berpindah dari satu tahap ke tahap berikutnya berdasarkan hasil interaksi — bukan urutan statis, melainkan mengikuti learning state secara adaptif.
+The AI determines when the user needs to move from one stage to the next based on interaction results — not a static sequence, but one that follows the learning state adaptively.
 
 ### 7.3 Workspace Layout
 
-Workspace menggunakan dua area utama:
+The workspace uses two main areas:
 
 **Left Sidebar (Learning Map + Navigation)**
 - Material name
@@ -404,7 +404,7 @@ Workspace menggunakan dua area utama:
 - Guided Study Session
 - Learning feedback
 
-Contoh sidebar:
+Example sidebar:
 
 ```
 ┌─────────────────────────┐
@@ -430,11 +430,11 @@ Contoh sidebar:
 └─────────────────────────┘
 ```
 
-### 7.4 Sidebar sebagai Learning Map
+### 7.4 Sidebar as Learning Map
 
-Sidebar bukan hanya navigasi — sidebar juga berfungsi sebagai peta visual yang menunjukkan kondisi pemahaman user terhadap setiap topic/subtopic, sehingga user dapat langsung melihat apa yang sudah dikuasai, sedang dipelajari, perlu direview, dan belum pernah dipelajari.
+The sidebar is not just navigation — it also acts as a visual map that shows the user's understanding of each topic/subtopic, so users can immediately see what they have mastered, are currently studying, need to review, and have never studied.
 
-Topic/subtopic menggunakan interaksi collapsible/accordion, default dalam keadaan compact:
+Topics/subtopics use a collapsible/accordion interaction, compact by default:
 
 ```
 Collapsed:
@@ -446,18 +446,18 @@ Expanded:
   Needs Review
 ```
 
-Progress bar hanya ditampilkan ketika subtopic dibuka.
+The progress bar is only shown when the subtopic is expanded.
 
 **Learning status:**
 
-| Simbol | Status |
+| Symbol | Status |
 |---|---|
 | ✓ | Mastered |
 | ◐ | In Progress |
 | ⚠ | Needs Review |
 | ○ | Not Started |
 
-Jika user menekan subtopic dengan status Needs Review, Studyback langsung memfokuskan AI Teacher pada topic/subtopic tersebut:
+If the user taps a subtopic with the Needs Review status, Studyback immediately focuses the AI Teacher on that topic/subtopic:
 
 ```
 ⚠ Polymorphism
@@ -467,7 +467,7 @@ Studyback focuses AI Teacher on Polymorphism
 Review / Teach interaction begins
 ```
 
-Dengan demikian sidebar juga menjadi shortcut menuju personalized review.
+Thus, the sidebar also becomes a shortcut to personalized review.
 
 ---
 
@@ -477,19 +477,19 @@ Dengan demikian sidebar juga menjadi shortcut menuju personalized review.
 
 ```
 Learn
-  ↓ AI menjelaskan materi/topic
+  ↓ AI explains the material/topic
 Test
-  ↓ AI menghasilkan quiz
+  ↓ AI generates quiz
 Evaluate
-  ↓ AI mengevaluasi jawaban & memberi feedback
+  ↓ AI evaluates answers & gives feedback
 Weak Topic Detection
-  ↓ Sistem menentukan topic yang masih lemah
+  ↓ System identifies weak topics
 Review
-  ↓ Studyback merekomendasikan materi/topic untuk dipelajari kembali
-Learning State diperbarui
+  ↓ Studyback recommends material/topic to re-learn
+Learning State updated
 ```
 
-Hasil quiz/interaksi secara langsung memengaruhi Learning State — loop ini tidak boleh terlihat sebagai workflow statis:
+Quiz/interaction results directly affect the Learning State — this loop must not appear as a static workflow:
 
 ```
 Quiz → Calculate Score → Update Topic/Subtopic Mastery → Determine Status
@@ -498,15 +498,15 @@ Quiz → Calculate Score → Update Topic/Subtopic Mastery → Determine Status
 
 ### 8.2 Mastery System
 
-Mastery disimpan terutama pada level **Subtopic**, dihitung dengan pendekatan sederhana dan deterministic (bukan knowledge tracing atau machine learning kompleks):
+Mastery is stored primarily at the **Subtopic** level, calculated with a simple and deterministic approach (not complex knowledge tracing or machine learning):
 
-| Skor | Status |
+| Score | Status |
 |---|---|
 | < 60% | Needs Review |
 | 60% – 79% | In Progress |
 | ≥ 80% | Mastered |
 
-### 8.3 Learning State (Contoh)
+### 8.3 Learning State (Example)
 
 ```
 Object Oriented Programming
@@ -524,45 +524,45 @@ Recommendation:
 "You struggled with Polymorphism. Let's review it."
 ```
 
-Learning State disimpan agar proses belajar dapat berlanjut di kemudian hari — pengguna dapat kembali ke materi yang sama dan melanjutkan berdasarkan progress sebelumnya.
+The Learning State is stored so that the learning process can continue later — users can return to the same material and continue based on their previous progress.
 
 ---
 
-## 9. Prinsip AI Output & Context Boundary
+## 9. AI Output Principles & Context Boundary
 
 ### 9.1 Structured AI Output
 
-Untuk bagian yang membutuhkan data terstruktur, AI menghasilkan structured JSON yang kemudian digunakan oleh application logic. Contoh area yang menggunakan pendekatan ini:
+For parts that require structured data, the AI generates structured JSON that is then used by the application logic. Examples of areas that use this approach:
 
 - Topic extraction
 - Quiz generation
 - Answer evaluation
-- Output terkait learning state
+- Learning state-related output
 
-Ini dijelaskan pada level arsitektur produk saja, bukan sebagai dokumen implementasi teknis penuh.
+This is described at the product architecture level only, not as a full technical implementation document.
 
 ### 9.2 Context Boundary (RAG)
 
-Studyback menggunakan materi milik user sebagai sumber utama pembelajaran — AI harus menjawab berdasarkan materi yang dipilih/diunggah user, dengan alur singkat:
+Studyback uses the user's material as the primary learning source — the AI must answer based on the material the user selected/uploaded, with a brief flow:
 
 ```
 Material → Chunking → Retrieval → Relevant Context → AI Response
 ```
 
-Ini dijaga tetap sederhana; tidak diperluas menjadi sistem RAG yang kompleks.
+This is kept simple; it is not expanded into a complex RAG system.
 
 ---
 
 ## 10. Navigation Structure
 
-Navbar tetap sederhana dan **tidak** memiliki menu "Study" — Studyback Workspace bukan destination navbar utama, melainkan diakses melalui Home atau My Materials.
+The navbar stays simple and does **not** have a "Study" menu — the Studyback Workspace is not a main navbar destination, but is accessed through Home or My Materials.
 
 **Navbar:**
 - Home
 - My Materials
 - Profile
 
-**Jalur menuju Studyback Workspace:**
+**Paths to the Studyback Workspace:**
 
 ```
 Home → Upload Material → Material Ready → Start Learning → Studyback Workspace
@@ -570,7 +570,7 @@ Home → Recent Materials → Material Detail → Start Study Session → Studyb
 My Materials → Material Detail → Start Study Session → Studyback Workspace
 ```
 
-**Jalur upload dari My Materials:**
+**Upload path from My Materials:**
 
 ```
 My Materials → [+ Upload Material] → Home → Upload Material

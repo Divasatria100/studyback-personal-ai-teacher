@@ -19,32 +19,32 @@
 
 **Status:** Post-blueprint, pre-implementation
 **Source of truth:** Studyback Product Specification + Studyback System Architecture Blueprint
-**Constraint:** MVP hackathon 48 jam, tidak boleh over-engineered
-**Base preference:** React (frontend), Laravel (backend), PostgreSQL (database), `ai_service` sebagai provider-agnostic AI abstraction (default provider: OpenRouter dengan route `openrouter/free`; Featherless.ai sebagai optional hackathon provider; Mock AI Provider untuk development/testing)
+**Constraint:** 48-hour MVP hackathon, must not be over-engineered
+**Base preference:** React (frontend), Laravel (backend), PostgreSQL (database), `ai_service` as a provider-agnostic AI abstraction (default provider: OpenRouter with the `openrouter/free` route; Featherless.ai as an optional hackathon provider; Mock AI Provider for development/testing)
 
 ---
 
 ## 1. Executive Summary
 
-**Apakah current stack sudah cukup? Ya. Tech stack untuk Studyback MVP telah ditetapkan dan siap menjadi baseline implementation.**
+**Is the current stack sufficient? Yes. The tech stack for the Studyback MVP has been finalized and is ready to become the baseline implementation.**
 
-React, Laravel, PostgreSQL, dan `ai_service` tetap menjadi stack inti. Tidak diperlukan perubahan pada komponen arsitektur utama. Seluruh keputusan teknologi pendukung yang diperlukan untuk MVP juga telah ditetapkan secara eksplisit:
+React, Laravel, PostgreSQL, and `ai_service` remain the core stack. No changes to the main architecture components are required. All supporting technology decisions needed for the MVP have also been explicitly finalized:
 
-* **Modular monolith** → Laravel digunakan sebagai satu application backend dengan service classes dan folder per modul, tanpa microservice terpisah.
-* **AI Orchestrator** → diimplementasikan sebagai `ai_service` **in-process Laravel service** yang thin dan stateless. Service ini menjadi satu-satunya caller ke external LLM provider — melalui sebuah **LLM Provider Abstraction** di dalamnya — dan tidak memiliki database, API publik, authentication, atau deployment terpisah.
-* **AI Provider** → `ai_service` tidak terikat pada satu provider tunggal. **OpenRouter** dengan route `openrouter/free` ditetapkan sebagai default provider/route untuk MVP. **Featherless.ai** tetap didukung sebagai **optional provider**, terutama karena merupakan hackathon partner dan berpotensi menyediakan inference credits. **Mock AI Provider** tersedia untuk local development, testing, dan situasi ketika tidak ada real AI API yang dapat diakses.
-* **AI Model** → tidak ada primary/fallback model yang di-hardcode secara permanen ke dalam arsitektur. Model spesifik seperti `gpt-oss-20b` atau `Nemotron 3 Nano 30B A3B` dapat digunakan secara opsional ketika pinned/deterministic model selection dibutuhkan dan model tersebut tersedia pada provider/plan yang dipilih. Baseline MVP tetap menggunakan `openrouter/free` sebagai default route.
-* **RAG / Retrieval** → menggunakan PostgreSQL filter query berbasis `material_id` dan `topic/subtopic_id`. Vector database tidak digunakan pada MVP.
-* **Chunking** → menggunakan fixed-length chunking dengan target **~1.000 karakter dan ~200 karakter overlap**. Heading-based atau heading-regex chunking tidak digunakan.
-* **PDF Text Extraction** → `spatie/pdf-to-text` dengan Poppler ditetapkan sebagai primary extractor, dengan `smalot/pdfparser` sebagai optional fallback.
-* **File Storage** → Laravel Filesystem dengan local disk digunakan untuk menyimpan PDF secara private dan menyediakan authenticated backend-proxied download.
-* **Background Processing** → synchronous processing digunakan sebagai baseline MVP. Laravel Queue hanya menjadi opsi cadangan apabila processing terlalu lambat untuk UX.
-* **Redis dan Vector Database** → tidak digunakan pada MVP karena tidak terdapat kebutuhan arsitektur yang membenarkan penambahan keduanya.
-* **Containerization** → Docker + docker-compose digunakan untuk frontend, backend, dan PostgreSQL. Tidak ada container terpisah untuk `ai_service`.
+* **Modular monolith** → Laravel is used as a single application backend with service classes and folders per module, without separate microservices.
+* **AI Orchestrator** → implemented as `ai_service`, a thin and stateless **in-process Laravel service**. This service is the only caller to the external LLM provider — through a **LLM Provider Abstraction** within it — and has no separate database, public API, authentication, or deployment.
+* **AI Provider** → `ai_service` is not tied to a single provider. **OpenRouter** with the `openrouter/free` route is set as the default provider/route for the MVP. **Featherless.ai** remains supported as an **optional provider**, mainly because it is a hackathon partner and may provide inference credits. **Mock AI Provider** is available for local development, testing, and situations where no real AI API is accessible.
+* **AI Model** → no primary/fallback model is permanently hardcoded into the architecture. Specific models such as `gpt-oss-20b` or `Nemotron 3 Nano 30B A3B` can optionally be used when pinned/deterministic model selection is needed and the model is available on the chosen provider/plan. The MVP baseline continues to use `openrouter/free` as the default route.
+* **RAG / Retrieval** → uses a PostgreSQL filter query based on `material_id` and `topic/subtopic_id`. No vector database is used in the MVP.
+* **Chunking** → uses fixed-length chunking targeting **~1,000 characters and ~200 characters of overlap**. Heading-based or heading-regex chunking is not used.
+* **PDF Text Extraction** → `spatie/pdf-to-text` with Poppler is set as the primary extractor, with `smalot/pdfparser` as an optional fallback.
+* **File Storage** → Laravel Filesystem with the local disk is used to store PDFs privately and provide authenticated backend-proxied downloads.
+* **Background Processing** → synchronous processing is used as the MVP baseline. Laravel Queue is only a backup option if processing is too slow for the UX.
+* **Redis and Vector Database** → not used in the MVP because there is no architectural need that justifies adding either of them.
+* **Containerization** → Docker + docker-compose is used for the frontend, backend, and PostgreSQL. There is no separate container for `ai_service`.
 
-Dengan keputusan tersebut, tidak ada lagi komponen utama yang berada dalam status *undecided* atau *needs benchmark*. Dokumen ini berfungsi sebagai **final tech stack baseline** sebelum masuk ke tahap Database Design, API Design, AI Architecture, dan UI/UX implementation.
+With these decisions, no major component remains in an *undecided* or *needs benchmark* state. This document serves as the **final tech stack baseline** before moving into the Database Design, API Design, AI Architecture, and UI/UX implementation phases.
 
-**Kesimpulan satu kalimat:** Studyback MVP memiliki tech stack dan arsitektur pendukung yang sudah ditetapkan secara final — termasuk business logic yang independen terhadap AI provider tertentu — sehingga implementasi dapat dimulai tanpa menambahkan komponen infrastruktur baru di luar keputusan yang tercantum dalam dokumen ini.
+**One-sentence conclusion:** The Studyback MVP has a finalized tech stack and supporting architecture — including business logic that is independent of any specific AI provider — so implementation can begin without adding new infrastructure components beyond the decisions listed in this document.
 
 ---
 
@@ -54,29 +54,29 @@ Dengan keputusan tersebut, tidak ada lagi komponen utama yang berada dalam statu
 | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
 | Frontend (SPA)                                                               | React                                                                                            | KEEP                                             |
 | API / Application Backend                                                    | Laravel (Controllers + Form Requests)                                                            | KEEP                                             |
-| Application Modules (Materials, Topics, Study Session, Quiz, Learning State) | Laravel Service classes / Actions, satu per modul, di dalam satu Laravel app (modular monolith)  | KEEP + terapkan sebagai folder per modul         |
-| Authentication                                                               | Laravel Sanctum (session/token)                                                                  | ADD (bagian dari Laravel, bukan komponen baru)   |
-| AI Orchestrator                                                              | `ai_service` — in-process Laravel service, thin dan stateless                                    | KEEP + tetapkan sebagai internal Laravel service |
-| LLM Provider Abstraction                                                     | Interface provider-agnostic di dalam `ai_service` (OpenRouter / Featherless.ai / Mock)           | ADD (bagian dari `ai_service`, bukan komponen baru) |
+| Application Modules (Materials, Topics, Study Session, Quiz, Learning State) | Laravel Service classes / Actions, one per module, within a single Laravel app (modular monolith)  | KEEP + implement as a folder per module         |
+| Authentication                                                               | Laravel Sanctum (session/token)                                                                  | ADD (part of Laravel, not a new component)   |
+| AI Orchestrator                                                              | `ai_service` — in-process Laravel service, thin and stateless                                    | KEEP + establish as an internal Laravel service |
+| LLM Provider Abstraction                                                     | Provider-agnostic interface within `ai_service` (OpenRouter / Featherless.ai / Mock)           | ADD (part of `ai_service`, not a new component) |
 | Retrieval / RAG                                                              | PostgreSQL query filter (material_id + topic_id)                                                 | KEEP                                             |
-| LLM Interface                                                                | HTTP client dari `ai_service`, melalui LLM Provider Abstraction, ke external LLM provider (OpenAI-compatible) | KEEP + generalisasi dari Featherless-only menjadi provider-agnostic |
+| LLM Interface                                                                | HTTP client from `ai_service`, through the LLM Provider Abstraction, to the external LLM provider (OpenAI-compatible) | KEEP + generalize from Featherless-only to provider-agnostic |
 | Database                                                                     | PostgreSQL                                                                                       | KEEP                                             |
-| File Storage                                                                 | Laravel Filesystem (local disk driver)                                                           | ADD (konfigurasi, bukan tool baru)               |
-| Material Processing Pipeline                                                 | Laravel job/controller action (sync) + library PDF extraction                                    | ADD library                                      |
-| Background Processing                                                        | Tidak ada (synchronous), Laravel Queue `sync` driver jika diperlukan                              | NOT REQUIRED (Redis), OPTIONAL (Queue)           |
+| File Storage                                                                 | Laravel Filesystem (local disk driver)                                                           | ADD (configuration, not a new tool)               |
+| Material Processing Pipeline                                                 | Laravel job/controller action (sync) + PDF extraction library                                    | ADD library                                      |
+| Background Processing                                                        | None (synchronous), Laravel Queue `sync` driver if needed                              | NOT REQUIRED (Redis), OPTIONAL (Queue)           |
 | Containerization                                                             | Docker (docker-compose: frontend, app, db)                                                       | KEEP                                             |
 
-**Catatan tentang posisi `ai_service`:** `ai_service` merupakan **in-process service di dalam aplikasi Laravel**, bukan Python/Node service, microservice, atau container terpisah. `ai_service` tidak memiliki API publik, authentication terpisah, database, atau deployment independen.
+**Note on the position of `ai_service`:** `ai_service` is an **in-process service inside the Laravel application**, not a Python/Node service, microservice, or separate container. `ai_service` has no public API, separate authentication, database, or independent deployment.
 
-`ai_service` berfungsi sebagai thin, stateless abstraction layer yang bertanggung jawab untuk membangun prompt, memilih/mengonfigurasi provider, memilih/mengonfigurasi model, memanggil external LLM provider melalui LLM Provider Abstraction, menangani retry/fallback, memvalidasi structured output, dan menormalisasi response dari provider menjadi format internal yang konsisten. Laravel tetap menjadi satu-satunya pemilik business state dan database state. `ai_service` tidak pernah menulis langsung ke database.
+`ai_service` acts as a thin, stateless abstraction layer responsible for building prompts, selecting/configuring providers, selecting/configuring models, calling the external LLM provider through the LLM Provider Abstraction, handling retry/fallback, validating structured output, and normalizing provider responses into a consistent internal format. Laravel remains the sole owner of business state and database state. `ai_service` never writes directly to the database.
 
-Komunikasi AI menggunakan HTTP hanya pada boundary eksternal:
+AI communication uses HTTP only at the external boundary:
 
 **Laravel `ai_service` → LLM Provider Abstraction → Configured External LLM Provider (OpenRouter / Featherless.ai / Mock)**
 
-Tidak ada HTTP communication antara Laravel dengan `ai_service` karena `ai_service` berjalan di dalam proses aplikasi Laravel yang sama. Detail provider-specific (base URL, API key, format request) diisolasi di dalam implementation/configuration layer LLM Provider Abstraction, sehingga modul aplikasi (Materials, Topics, Quiz, dsb.) tidak pernah bergantung langsung pada OpenRouter, Featherless, atau model tertentu.
+There is no HTTP communication between Laravel and `ai_service` because `ai_service` runs within the same Laravel application process. Provider-specific details (base URL, API key, request format) are isolated inside the implementation/configuration layer of the LLM Provider Abstraction, so application modules (Materials, Topics, Quiz, etc.) never depend directly on OpenRouter, Featherless, or a specific model.
 
-Keputusan ini menetapkan arsitektur **Modular Monolith** untuk MVP dan menolak model hybrid atau standalone AI service untuk saat ini.
+This decision establishes the **Modular Monolith** architecture for the MVP and rejects a hybrid model or standalone AI service for now.
 
 
 ---
@@ -85,102 +85,102 @@ Keputusan ini menetapkan arsitektur **Modular Monolith** untuk MVP dan menolak m
 
 | Area                              | Technology                                            | Purpose                                                                                                                  | Status       |
 | ---------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| Frontend                          | React                                                  | SPA untuk Home / My Materials / Studyback Workspace                                                                      | FINAL        |
-| Backend/API                       | Laravel                                                | Modular monolith, seluruh business logic & state mutation                                                                | FINAL        |
+| Frontend                          | React                                                  | SPA for Home / My Materials / Studyback Workspace                                                                      | FINAL        |
+| Backend/API                       | Laravel                                                | Modular monolith, all business logic & state mutation                                                                  | FINAL        |
 | Database                          | PostgreSQL                                             | Materials, topics, subtopics, chunks, sessions, quizzes, learning state                                                  | FINAL        |
-| Auth                               | Laravel Sanctum                                        | Session/token authentication dan user ownership scoping                                                                  | FINAL        |
-| AI Integration                    | `ai_service` (Laravel in-process service)              | Thin wrapper untuk prompt construction, provider-agnostic LLM calls, retry handling, dan structured output validation    | FINAL        |
-| LLM Provider Abstraction          | Interface di dalam `ai_service`                        | Menyembunyikan detail provider-specific dari application modules; memungkinkan penggantian provider tanpa mengubah business logic | FINAL        |
-| Default AI Provider               | OpenRouter                                             | Default provider untuk inference — topic extraction, quiz generation, Teach Me, dan answer evaluation                    | FINAL        |
-| Default AI Route/Model            | `openrouter/free`                                      | Free-model router pada OpenRouter; dynamically memilih model gratis yang tersedia                                       | FINAL        |
-| Optional AI Provider              | Featherless.ai                                         | Hackathon partner; digunakan apabila dikonfigurasi dan inference credits berhasil di-claim                               | OPTIONAL     |
-| Development/Test AI Provider      | Mock AI Provider                                       | Digunakan untuk local development dan automated testing tanpa memanggil real AI API                                      | OPTIONAL     |
-| Pinned Model Strategy (opsional)  | mis. `gpt-oss-20b`, `Nemotron 3 Nano 30B A3B`          | Digunakan hanya ketika deterministic model selection dibutuhkan dan model tersedia pada provider/plan yang dipilih        | OPTIONAL     |
-| PDF Text Extraction               | `spatie/pdf-to-text` (wrap `pdftotext` dari Poppler)   | Extraction PDF → teks mentah                                                                                             | FINAL        |
-| PDF Extraction Fallback           | `smalot/pdfparser`                                     | Fallback jika binary Poppler tidak tersedia di environment deploy                                                        | OPTIONAL     |
-| File Storage                      | Laravel Filesystem, driver `local`                     | Menyimpan PDF asli untuk Download Material                                                                               | FINAL        |
-| RAG / Retrieval                   | PostgreSQL `WHERE`-filter query                        | Filter chunk berdasarkan `material_id` + `topic/subtopic_id`                                                             | FINAL        |
-| Chunking                          | PHP native fixed-length chunking                       | Membagi teks secara deterministik sebelum topic identification                                                          | FINAL        |
-| Chunk Size                        | ~1,000 characters                                       | Target ukuran setiap chunk                                                                                               | FINAL        |
-| Chunk Overlap                     | ~200 characters                                         | Mempertahankan konteks antar chunk                                                                                       | FINAL        |
-| Background Processing             | Synchronous (inline)                                    | Processing dilakukan dalam request lifecycle untuk MVP                                                                   | FINAL        |
-| Background Processing (opsional)  | Laravel Queue, driver `sync` atau `database`           | Hanya digunakan jika processing upload terlalu lambat untuk UX                                                           | OPTIONAL     |
-| Redis                              | —                                                       | Tidak ada use case yang membutuhkan Redis pada MVP                                                                       | NOT REQUIRED |
-| Vector Database                   | —                                                       | Retrieval dibatasi pada single-material/topic; PostgreSQL filtering cukup                                                | NOT REQUIRED |
-| Containerization                  | Docker + docker-compose                                | Container untuk Laravel, React, dan PostgreSQL                                                                           | FINAL        |
+| Auth                               | Laravel Sanctum                                        | Session/token authentication and user ownership scoping                                                                  | FINAL        |
+| AI Integration                    | `ai_service` (Laravel in-process service)              | Thin wrapper for prompt construction, provider-agnostic LLM calls, retry handling, and structured output validation    | FINAL        |
+| LLM Provider Abstraction          | Interface inside `ai_service`                        | Hides provider-specific details from application modules; allows swapping providers without changing business logic | FINAL        |
+| Default AI Provider               | OpenRouter                                             | Default provider for inference — topic extraction, quiz generation, Teach Me, and answer evaluation                    | FINAL        |
+| Default AI Route/Model            | `openrouter/free`                                      | Free-model router on OpenRouter; dynamically selects available free models                                       | FINAL        |
+| Optional AI Provider              | Featherless.ai                                         | Hackathon partner; used when configured and inference credits are successfully claimed                               | OPTIONAL     |
+| Development/Test AI Provider      | Mock AI Provider                                       | Used for local development and automated testing without calling a real AI API                                      | OPTIONAL     |
+| Pinned Model Strategy (optional)  | e.g. `gpt-oss-20b`, `Nemotron 3 Nano 30B A3B`          | Used only when deterministic model selection is needed and the model is available on the chosen provider/plan        | OPTIONAL     |
+| PDF Text Extraction               | `spatie/pdf-to-text` (wraps `pdftotext` from Poppler)   | PDF extraction → raw text                                                                                             | FINAL        |
+| PDF Extraction Fallback           | `smalot/pdfparser`                                     | Fallback if the Poppler binary is not available in the deployment environment                                                        | OPTIONAL     |
+| File Storage                      | Laravel Filesystem, `local` driver                     | Stores the original PDF for Download Material                                                                               | FINAL        |
+| RAG / Retrieval                   | PostgreSQL `WHERE`-filter query                        | Filters chunks by `material_id` + `topic/subtopic_id`                                                             | FINAL        |
+| Chunking                          | PHP native fixed-length chunking                       | Splits text deterministically before topic identification                                                          | FINAL        |
+| Chunk Size                        | ~1,000 characters                                       | Target size for each chunk                                                                                               | FINAL        |
+| Chunk Overlap                     | ~200 characters                                         | Preserves context between chunks                                                                                       | FINAL        |
+| Background Processing             | Synchronous (inline)                                    | Processing is performed within the request lifecycle for the MVP                                                                   | FINAL        |
+| Background Processing (optional)  | Laravel Queue, `sync` or `database` driver           | Only used if upload processing is too slow for the UX                                                           | OPTIONAL     |
+| Redis                              | —                                                       | No use case requires Redis in the MVP                                                                       | NOT REQUIRED |
+| Vector Database                   | —                                                       | Retrieval is limited to a single material/topic; PostgreSQL filtering is sufficient                                                | NOT REQUIRED |
+| Containerization                  | Docker + docker-compose                                | Containers for Laravel, React, and PostgreSQL                                                                           | FINAL        |
 | API Communication                 | REST (JSON)                                             | Frontend ↔ Laravel                                                                                                       | FINAL        |
 | External AI Communication         | HTTPS REST API (OpenAI-compatible)                      | Laravel `ai_service` ↔ configured LLM provider (OpenRouter default, Featherless optional)                                | FINAL        |
 
 ### AI Provider & Model Configuration
 
-Studyback tidak lagi bergantung secara ketat pada satu provider AI tunggal atau satu model tunggal. `ai_service` mengekspos sebuah **LLM Provider Abstraction** di mana provider dan model dapat dikonfigurasi, bukan di-hardcode ke dalam business logic.
+Studyback no longer depends strictly on a single AI provider or a single model. `ai_service` exposes a **LLM Provider Abstraction** in which the provider and model can be configured rather than hardcoded into business logic.
 
 **Default Provider — OpenRouter**
 
-OpenRouter dipilih sebagai default provider untuk MVP karena:
+OpenRouter was chosen as the default provider for the MVP because:
 
-* Menyediakan OpenAI-compatible API sehingga integrasi dari sisi `ai_service` tetap sederhana (HTTP client yang sama dengan yang sebelumnya digunakan untuk Featherless).
-* Menyediakan route `openrouter/free`, yaitu free-model router yang secara dinamis memilih model gratis yang sedang tersedia di OpenRouter — bukan satu model tunggal seperti `gpt-oss-20b`.
-* Tidak mengunci Studyback pada satu model spesifik; ketersediaan model gratis di OpenRouter dapat berubah dari waktu ke waktu, dan router menangani pemilihan tersebut di level provider, bukan di level arsitektur aplikasi.
+* It provides an OpenAI-compatible API, keeping the integration on the `ai_service` side simple (the same HTTP client previously used for Featherless).
+* It provides the `openrouter/free` route, a free-model router that dynamically selects the free models currently available on OpenRouter — not a single model like `gpt-oss-20b`.
+* It does not lock Studyback into a specific model; the availability of free models on OpenRouter can change over time, and the router handles that selection at the provider level, not at the application architecture level.
 
 **Default Route — `openrouter/free`**
 
-`openrouter/free` adalah router, bukan model individual. Beberapa hal penting untuk didokumentasikan dengan benar:
+`openrouter/free` is a router, not an individual model. Several important points should be documented correctly:
 
-* `openrouter/free` secara dinamis memilih dari beberapa varian model gratis yang tersedia di OpenRouter pada saat request dikirim.
-* Router dapat mempertimbangkan kapabilitas yang dibutuhkan oleh request, termasuk structured outputs, tool calling, image understanding, dan kapabilitas lain yang didukung.
-* Karena pool model gratis yang tersedia dapat berubah, Studyback **tidak** menjadikan arsitektur intinya bergantung pada satu model spesifik di baliknya.
-* Model spesifik yang akhirnya dipilih di balik `openrouter/free` merupakan **implementation/runtime detail**, bukan keputusan arsitektur aplikasi yang permanen.
+* `openrouter/free` dynamically selects from the various free model variants available on OpenRouter at the time the request is sent.
+* The router can consider the capabilities required by the request, including structured outputs, tool calling, image understanding, and other supported capabilities.
+* Because the pool of available free models can change, Studyback does **not** make its core architecture depend on any single model behind it.
+* The specific model ultimately selected behind `openrouter/free` is an **implementation/runtime detail**, not a permanent application architecture decision.
 
 **Optional Provider — Featherless.ai**
 
-Featherless.ai tetap didukung sebagai provider opsional, terutama karena:
+Featherless.ai remains supported as an optional provider, mainly because:
 
-* Featherless.ai merupakan hackathon partner untuk event ini.
-* Peserta berpotensi memperoleh inference credits apabila berhasil melakukan klaim credits dari Featherless.
-* Featherless.ai menyediakan endpoint OpenAI-compatible, sehingga dapat diintegrasikan melalui LLM Provider Abstraction yang sama tanpa mengubah business logic aplikasi.
+* Featherless.ai is a hackathon partner for this event.
+* Participants may obtain inference credits if they successfully claim credits from Featherless.
+* Featherless.ai provides an OpenAI-compatible endpoint, so it can be integrated through the same LLM Provider Abstraction without changing the application's business logic.
 
-Featherless.ai **tidak** menjadi provider wajib. Apabila tidak dikonfigurasi atau credits tidak berhasil diklaim, aplikasi tetap dapat berjalan sepenuhnya menggunakan OpenRouter (atau Mock AI Provider untuk development).
+Featherless.ai is **not** a required provider. If it is not configured or credits are not successfully claimed, the application can still run entirely on OpenRouter (or the Mock AI Provider for development).
 
 **Development/Test Provider — Mock AI Provider**
 
-Mock AI Provider digunakan untuk:
+The Mock AI Provider is used for:
 
-* Local development tanpa membutuhkan API key real.
-* Automated testing yang membutuhkan output deterministic dan tidak bergantung pada layanan eksternal.
-* Situasi ketika tidak ada real AI API yang dapat diakses (mis. rate limit, downtime, atau credits habis).
+* Local development without needing a real API key.
+* Automated testing that requires deterministic output and does not depend on external services.
+* Situations where no real AI API is accessible (e.g., rate limits, downtime, or exhausted credits).
 
-**Pinned Model Strategy (Opsional)**
+**Pinned Model Strategy (Optional)**
 
-Model spesifik seperti `gpt-oss-20b` atau `Nemotron 3 Nano 30B A3B` **boleh** digunakan sebagai pinned model apabila:
+Specific models such as `gpt-oss-20b` or `Nemotron 3 Nano 30B A3B` **may** be used as pinned models when:
 
-* Deterministic model selection dibutuhkan (misalnya untuk konsistensi hasil selama demo), dan
-* Model tersebut tersedia pada provider/plan yang dikonfigurasi.
+* Deterministic model selection is needed (for example, for consistent results during a demo), and
+* The model is available on the configured provider/plan.
 
-Model-model ini adalah **model options**, bukan router — berbeda dari `openrouter/free` yang merupakan router. Model-model ini **tidak** ditetapkan sebagai primary/fallback model wajib pada Tech Stack; penetapan tersebut, jika dibutuhkan, didokumentasikan sebagai strategi opsional pada AI Architecture document, bukan sebagai keputusan Tech Stack yang mengunci implementasi.
+These models are **model options**, not routers — unlike `openrouter/free`, which is a router. These models are **not** set as required primary/fallback models in the Tech Stack; that designation, if needed, is documented as an optional strategy in the AI Architecture document, not as a Tech Stack decision that locks the implementation.
 
 ### AI Service Architecture
 
-`ai_service` merupakan **in-process Laravel service**, bukan container atau backend service terpisah.
+`ai_service` is an **in-process Laravel service**, not a separate container or backend service.
 
-Dengan demikian:
+Therefore:
 
-* `ai_service` berjalan di dalam aplikasi Laravel.
-* Tidak terdapat komunikasi REST antara Laravel dan `ai_service`.
-* `ai_service` menjadi abstraction layer antara business logic Laravel dan external LLM provider yang dikonfigurasi.
-* `ai_service` menangani prompt construction, provider selection, model selection, API request, retry/fallback, structured-output validation, dan response normalization.
-* External LLM provider (OpenRouter secara default, Featherless.ai secara opsional, atau Mock AI Provider untuk development/testing) diakses melalui LLM Provider Abstraction di dalam `ai_service`.
-* Tidak diperlukan container khusus untuk `ai_service`.
+* `ai_service` runs inside the Laravel application.
+* There is no REST communication between Laravel and `ai_service`.
+* `ai_service` acts as the abstraction layer between Laravel business logic and the configured external LLM provider.
+* `ai_service` handles prompt construction, provider selection, model selection, API requests, retry/fallback, structured-output validation, and response normalization.
+* The external LLM provider (OpenRouter by default, Featherless.ai optionally, or the Mock AI Provider for development/testing) is accessed through the LLM Provider Abstraction within `ai_service`.
+* No dedicated container is required for `ai_service`.
 
-Arsitektur komunikasi AI:
+AI communication architecture:
 
 **React → Laravel API → `ai_service` → LLM Provider Abstraction → Configured External LLM Provider**
 
-Provider dan model yang digunakan ditentukan melalui konfigurasi (lihat Section 7.3 — Environment Configuration), bukan hard-coded di dalam business logic.
+The provider and model used are determined through configuration (see Section 7.3 — Environment Configuration), not hardcoded into business logic.
 
 ## 4. PDF Processing
 
-Pipeline yang dibutuhkan:
+The required pipeline:
 
 ```
 PDF → Text Extraction → Cleaning → Chunking → Topic/Subtopic Identification → Storage
@@ -188,57 +188,57 @@ PDF → Text Extraction → Cleaning → Chunking → Topic/Subtopic Identificat
 
 Text Extraction — spatie/pdf-to-text (PRIMARY)
 
-Wrapper Composer package di sekitar pdftotext (bagian dari Poppler-utils), dipanggil sebagai binary.
-Dipilih sebagai primary extractor karena pdftotext umumnya memberikan hasil extraction yang baik untuk PDF berbasis teks, termasuk banyak dokumen dengan layout yang relatif kompleks seperti slide dan lecture notes.
-Karena Docker sudah menjadi bagian dari stack, penambahan poppler-utils ke Dockerfile tetap sederhana dan tidak menambah infrastruktur besar untuk MVP.
+A Composer package wrapper around pdftotext (part of Poppler-utils), invoked as a binary.
+Chosen as the primary extractor because pdftotext generally produces good extraction results for text-based PDFs, including many documents with relatively complex layouts such as slides and lecture notes.
+Since Docker is already part of the stack, adding poppler-utils to the Dockerfile remains simple and does not add significant infrastructure for the MVP.
 
 Text Extraction — smalot/pdfparser (FALLBACK/OPTIONAL)
 
-Pure-PHP, tidak membutuhkan binary eksternal.
-Berguna sebagai fallback apabila terjadi kendala pada instalasi atau eksekusi Poppler, atau jika deployment target tidak mengizinkan binary eksternal.
-Kualitas extraction dapat lebih terbatas pada PDF dengan layout kompleks, tetapi cukup sebagai fallback untuk MVP.
+Pure-PHP, requires no external binary.
+Useful as a fallback if there are issues with installing or running Poppler, or if the deployment target does not allow external binaries.
+Extraction quality can be more limited on PDFs with complex layouts, but it is sufficient as a fallback for the MVP.
 
 Cleaning
 
-Deterministic, menggunakan PHP native: menghapus whitespace berlebih, menormalisasi line break, dan jika memungkinkan membuang header/footer yang berulang atau pola nomor halaman.
-Tidak membutuhkan library tambahan.
+Deterministic, using native PHP: removes excessive whitespace, normalizes line breaks, and, where possible, discards repeated headers/footers or page-number patterns.
+Requires no additional libraries.
 
 Chunking
 
-Deterministic dan menggunakan fixed-length chunking sebagai strategi utama untuk MVP.
-Teks dipotong menjadi chunk dengan ukuran sekitar 1.000 karakter dan menggunakan overlap sekitar 200 karakter antar-chunk.
-Pendekatan ini tidak bergantung pada struktur heading atau format PDF, sehingga lebih robust terhadap variasi dokumen kuliah seperti slide, lecture notes, dan PDF dengan struktur heading yang tidak konsisten.
-Implementasi menggunakan PHP native dan tidak membutuhkan library tambahan.
+Deterministic, using fixed-length chunking as the main strategy for the MVP.
+Text is split into chunks of roughly 1,000 characters with roughly 200 characters of overlap between chunks.
+This approach does not depend on heading structure or PDF format, making it more robust to variations in course documents such as slides, lecture notes, and PDFs with inconsistent heading structures.
+The implementation uses native PHP and requires no additional libraries.
 
 Topic/Subtopic Identification
 
-Ini merupakan tahap AI utama dalam pipeline.
-Proses dilakukan melalui `ai_service`, yang meneruskan request ke provider LLM yang dikonfigurasi (default: OpenRouter dengan route `openrouter/free`; opsional: Featherless.ai atau Mock AI Provider).
-Hasil berupa structured JSON divalidasi oleh Laravel sebelum disimpan untuk memastikan format dan data yang diterima sesuai dengan kebutuhan sistem.
+This is the main AI stage in the pipeline.
+The process runs through `ai_service`, which forwards the request to the configured LLM provider (default: OpenRouter with the `openrouter/free` route; optional: Featherless.ai or the Mock AI Provider).
+The resulting structured JSON is validated by Laravel before being stored to ensure the format and data received match the system's requirements.
 
 Storage
 
-Hasil akhir berupa topics, subtopics, dan chunks yang terkait dengan material serta topic/subtopic disimpan di PostgreSQL.
-Tidak membutuhkan library atau database tambahan untuk MVP.
+The final result — topics, subtopics, and chunks linked to the material and its topics/subtopics — is stored in PostgreSQL.
+No additional libraries or databases are needed for the MVP.
 
-Tidak direkomendasikan: OCR library (Tesseract)
+Not recommended: OCR library (Tesseract)
 
-OCR berada di luar scope MVP karena spesifikasi Studyback mengasumsikan PDF berbasis teks, bukan PDF hasil scan gambar.
+OCR is out of the MVP scope because the Studyback specification assumes text-based PDFs, not image-scanned PDFs.
 
 ---
 
 ## 5. File Storage
 
-**Rekomendasi: Local Storage, via Laravel Filesystem `local`.**
+**Recommendation: Local Storage, via the Laravel Filesystem `local` driver.**
 
-Alasan:
+Reasons:
 
-* Architecture Section 15 secara eksplisit menaruh scaling file storage sebagai "future evolution", bukan kebutuhan MVP.
-* Deployment target adalah "single deployable unit" (Section 17) — satu instance backend, sehingga local persistent storage cukup untuk kebutuhan MVP.
-* Laravel Filesystem API sudah abstract (`Storage::disk('local')`), sehingga jika suatu saat dibutuhkan pindah ke S3-compatible object storage, perubahan dapat dilakukan melalui konfigurasi disk tanpa mengubah arsitektur aplikasi secara signifikan.
-* File PDF original disimpan di `storage/app/private`, di luar `public/`, sehingga tidak dapat diakses langsung melalui URL publik.
-* **Download Material merupakan bagian dari Material Detail dan tetap diimplementasikan sebagai MVP feature.** File diberikan melalui backend-proxied download setelah sistem melakukan autentikasi dan memverifikasi bahwa material dimiliki oleh user yang sedang login.
-* Laravel Filesystem menyediakan `Storage::download()` sehingga implementasi authenticated file download tetap sederhana dan tidak membutuhkan sistem file-serving tambahan.
+* Architecture Section 15 explicitly places file storage scaling as a "future evolution", not an MVP requirement.
+* The deployment target is a "single deployable unit" (Section 17) — a single backend instance, so local persistent storage is sufficient for MVP needs.
+* The Laravel Filesystem API is already abstracted (`Storage::disk('local')`), so if a move to S3-compatible object storage is ever needed, the change can be made through disk configuration without significantly altering the application architecture.
+* Original PDF files are stored in `storage/app/private`, outside `public/`, so they cannot be accessed directly through a public URL.
+* **Download Material is part of Material Detail and remains implemented as an MVP feature.** Files are served through a backend-proxied download after the system authenticates and verifies that the material is owned by the currently logged-in user.
+* The Laravel Filesystem provides `Storage::download()`, keeping the authenticated file download implementation simple and removing the need for an additional file-serving system.
 
 **File Storage & Download Flow:**
 
@@ -260,36 +260,36 @@ Ownership Check
 Storage::download()
 ```
 
-**Object/Cloud Storage: NOT REQUIRED untuk MVP.** Pertimbangkan hanya jika:
+**Object/Cloud Storage: NOT REQUIRED for the MVP.** Consider it only if:
 
-* Platform deploy pilihan menggunakan ephemeral filesystem sehingga file dapat hilang ketika container atau instance direstart.
-* Sistem nantinya berkembang menjadi multi-instance deployment yang membutuhkan shared object storage.
+* The chosen deployment platform uses an ephemeral filesystem, so files can be lost when the container or instance is restarted.
+* The system later grows into a multi-instance deployment that requires shared object storage.
 
-Jika deployment menggunakan VPS/Docker dengan persistent volume, local storage tetap sesuai untuk MVP. Jika platform deployment menggunakan filesystem ephemeral, object storage seperti S3-compatible storage atau Cloudflare R2 dapat digunakan sebagai penyesuaian deployment tanpa mengubah alur aplikasi utama.
+If the deployment uses VPS/Docker with a persistent volume, local storage remains suitable for the MVP. If the deployment platform uses an ephemeral filesystem, object storage such as S3-compatible storage or Cloudflare R2 can be used as a deployment adjustment without changing the core application flow.
 
 **Security Requirement:**
 
-* PDF original tidak disimpan di `public/`.
-* URL file asli tidak diekspos langsung ke client.
-* Download harus melalui authenticated backend route.
-* Backend harus memverifikasi ownership material sebelum mengirimkan file.
-* Nama file yang ditampilkan saat download dapat menggunakan `original_name`, sementara `file_path` menggunakan nama file internal yang tidak mudah ditebak.
+* Original PDFs are not stored in `public/`.
+* The original file URL is not exposed directly to the client.
+* Downloads must go through an authenticated backend route.
+* The backend must verify material ownership before serving the file.
+* The filename shown during download can use `original_name`, while `file_path` uses an internal filename that is hard to guess.
 
 
 ## 6. RAG / Retrieval
 
-* Validasi: Metadata-based retrieval menggunakan PostgreSQL SUDAH CUKUP untuk MVP. Tidak menggunakan vector database.
+* Validation: Metadata-based retrieval using PostgreSQL is ALREADY SUFFICIENT for the MVP. No vector database is used.
 
-* Studyback menggunakan retrieval berbasis metadata/filtering untuk mengambil context yang relevan dari material yang sedang dipelajari. Pendekatan ini dipilih karena sesuai dengan scope produk dan menjaga implementasi tetap sederhana selama hackathon 48 jam.
+* Studyback uses metadata/filtering-based retrieval to fetch the relevant context from the material being studied. This approach was chosen because it matches the product scope and keeps the implementation simple during the 48-hour hackathon.
 
-Alasan keputusan:
+Reasons for the decision:
 
-- Architecture Blueprint Section 8 & 17 memilih filter-based retrieval dan menempatkan vector database sebagai future evolution, bukan kebutuhan MVP.
-- Product Spec Section 9.2 menggunakan context boundary sederhana: Material → Chunking → Retrieval → Relevant Context → AI Response, tanpa kebutuhan semantic search.
-- Scope produk adalah single-material, topic-scoped interaction, sehingga user pada suatu sesi belajar hanya berinteraksi dengan material dan topic/subtopic tertentu.
-- Retrieval yang dibutuhkan pada dasarnya adalah mengambil chunk berdasarkan metadata, misalnya: "ambil semua chunk dari material X yang terkait dengan topic/subtopic Y".
-- PostgreSQL dapat menangani kebutuhan tersebut menggunakan query filtering biasa sehingga tidak membutuhkan embedding atau similarity search.
-- Menambahkan vector database seperti pgvector atau Pinecone akan menambah kompleksitas berupa embedding generation, vector storage, similarity tuning, dan retrieval pipeline tanpa manfaat yang signifikan untuk MVP.
+- Architecture Blueprint Sections 8 & 17 choose filter-based retrieval and place vector databases as a future evolution, not an MVP requirement.
+- Product Spec Section 9.2 uses a simple context boundary: Material → Chunking → Retrieval → Relevant Context → AI Response, with no semantic search requirement.
+- The product scope is single-material, topic-scoped interaction, so in a given study session the user only interacts with a specific material and its topics/subtopics.
+- The retrieval needed is essentially fetching chunks by metadata, for example: "get all chunks from material X related to topic/subtopic Y".
+- PostgreSQL can handle this with ordinary filter queries, so no embedding or similarity search is needed.
+- Adding a vector database such as pgvector or Pinecone would introduce complexity in the form of embedding generation, vector storage, similarity tuning, and a retrieval pipeline, with no significant benefit for the MVP.
 
 Retrieval Flow
 
@@ -307,67 +307,67 @@ Relevant Context
      ↓
 AI Response
 
-Implementasi teknis (konsep, bukan schema):
+Technical implementation (conceptual, not schema):
 
-Chunks memiliki relasi terhadap material, topic, dan jika diperlukan subtopic.
-PostgreSQL menggunakan index pada kolom filtering yang relevan untuk menjaga query tetap cepat.
-Retrieval dilakukan menggunakan filtering berdasarkan material dan topic/subtopic.
-Tidak membutuhkan vector embedding, vector database, atau ekstensi PostgreSQL tambahan untuk MVP.
+Chunks have relations to the material, topic, and, if needed, subtopic.
+PostgreSQL uses indexes on the relevant filtering columns to keep queries fast.
+Retrieval is done by filtering based on the material and topic/subtopic.
+No vector embeddings, vector database, or additional PostgreSQL extensions are needed for the MVP.
 
 ---
 
-## 7. AI Provider & Model Selection dan Structured Output Flow
+## 7. AI Provider & Model Selection and Structured Output Flow
 
-### 7.1 Rekomendasi
+### 7.1 Recommendation
 
-Studyback menggunakan pendekatan **provider-agnostic**: business logic aplikasi bergantung pada abstraksi `ai_service`, bukan pada satu provider atau model tertentu.
+Studyback uses a **provider-agnostic** approach: the application's business logic depends on the `ai_service` abstraction, not on any single provider or model.
 
 **DEFAULT PROVIDER: OpenRouter, route `openrouter/free`**
 
-- OpenRouter dipilih sebagai default provider untuk MVP karena menyediakan OpenAI-compatible API dan sebuah free-model router (`openrouter/free`) yang secara dinamis memilih model gratis yang tersedia.
-- `openrouter/free` **bukan** model individual — ia adalah router yang dapat mempertimbangkan kapabilitas yang dibutuhkan request (structured outputs, tool calling, image understanding, dsb.) ketika memilih model gratis yang tersedia saat itu.
-- Karena pool model gratis dapat berubah sewaktu-waktu, model spesifik di balik `openrouter/free` diperlakukan sebagai runtime detail, bukan keputusan arsitektur permanen.
+- OpenRouter was chosen as the default provider for the MVP because it provides an OpenAI-compatible API and a free-model router (`openrouter/free`) that dynamically selects available free models.
+- `openrouter/free` is **not** an individual model — it is a router that can consider the capabilities required by the request (structured outputs, tool calling, image understanding, etc.) when selecting the free models currently available.
+- Because the free-model pool can change at any time, the specific model behind `openrouter/free` is treated as a runtime detail, not a permanent architecture decision.
 
 **OPTIONAL PROVIDER: Featherless.ai**
 
-- Digunakan apabila dikonfigurasi (`FEATHERLESS_API_KEY` tersedia) dan inference credits berhasil diklaim, mengingat Featherless.ai adalah hackathon partner untuk event ini.
-- Diakses melalui LLM Provider Abstraction yang sama sehingga tidak membutuhkan perubahan pada business logic aplikasi.
+- Used when configured (`FEATHERLESS_API_KEY` available) and inference credits are successfully claimed, given that Featherless.ai is a hackathon partner for this event.
+- Accessed through the same LLM Provider Abstraction, so no changes to the application's business logic are needed.
 
 **DEVELOPMENT/TEST PROVIDER: Mock AI Provider**
 
-- Digunakan untuk local development dan automated testing agar tidak bergantung pada layanan eksternal maupun API key real.
+- Used for local development and automated testing so that no dependency on external services or real API keys is needed.
 
 **OPTIONAL PINNED MODEL STRATEGY**
 
-Apabila deterministic model selection dibutuhkan (misalnya demi konsistensi hasil saat demo), `ai_service` dapat dikonfigurasi untuk menggunakan model yang di-pin secara eksplisit, selama model tersebut tersedia pada provider/plan yang dikonfigurasi. Contoh model options yang dapat dipertimbangkan (bukan router, dan bukan model gratis permanen):
+If deterministic model selection is needed (for example, for consistent results during a demo), `ai_service` can be configured to use an explicitly pinned model, as long as that model is available on the configured provider/plan. Example model options that can be considered (not routers, and not permanent free models):
 
-- `gpt-oss-20b` — context window besar (128K), mendukung tool-use/structured output.
-- `Nemotron 3 Nano 30B A3B` — alternatif model options untuk task conversational seperti Teach Me.
+- `gpt-oss-20b` — large context window (128K), supports tool-use/structured output.
+- `Nemotron 3 Nano 30B A3B` — an alternative model option for conversational tasks such as Teach Me.
 
-Sebagai **optional optimization** (didokumentasikan lebih lanjut pada AI Architecture document), task-specific model mapping dapat berupa:
+As an **optional optimization** (documented further in the AI Architecture document), task-specific model mapping can be:
 
-| Use Case            | Model (opsional, jika tersedia)                          |
+| Use Case            | Model (optional, if available)                          |
 | -------------------- | ----------------------------------------------------------- |
-| Topic Identification | `gpt-oss-20b` (jika tersedia)                                |
-| Teach Me              | `Nemotron 3 Nano 30B A3B` atau `gpt-oss-20b` (jika tersedia) |
-| Quiz Generation       | `gpt-oss-20b` (jika tersedia)                                |
-| Answer Evaluation     | `gpt-oss-20b` (jika tersedia)                                |
+| Topic Identification | `gpt-oss-20b` (if available)                                |
+| Teach Me              | `Nemotron 3 Nano 30B A3B` or `gpt-oss-20b` (if available) |
+| Quiz Generation       | `gpt-oss-20b` (if available)                                |
+| Answer Evaluation     | `gpt-oss-20b` (if available)                                |
 
-Baseline MVP tetap **`openrouter/free`** untuk seluruh use case di atas; task-specific pinned model hanyalah optimisasi opsional dan tidak mengubah baseline Tech Stack.
+The MVP baseline remains **`openrouter/free`** for all the use cases above; task-specific pinned models are merely an optional optimization and do not change the Tech Stack baseline.
 
 ### 7.2 Fallback Strategy
 
-Karena ketersediaan provider dan model dapat berubah, fallback logic **tidak** didefinisikan sebagai satu pasangan primary-model → fallback-model yang fixed. Sebagai gantinya, fallback dibedakan menjadi tiga level:
+Because provider and model availability can change, the fallback logic is **not** defined as a single fixed primary-model → fallback-model pair. Instead, fallback is distinguished into three levels:
 
-1. **Provider fallback** — apabila default provider (OpenRouter) tidak dapat diakses atau gagal, `ai_service` dapat dikonfigurasi untuk mencoba provider opsional (Featherless.ai) apabila tersedia dan dikonfigurasi.
-2. **Model fallback** — apabila implementasi menggunakan pinned model, model-level fallback dapat menggunakan model lain yang kompatibel pada provider yang sama (mis. `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`), sesuai konfigurasi.
-3. **Development fallback** — apabila tidak ada provider real yang dapat diakses (mis. selama local development atau automated testing), `ai_service` menggunakan Mock AI Provider.
+1. **Provider fallback** — if the default provider (OpenRouter) is unreachable or fails, `ai_service` can be configured to try the optional provider (Featherless.ai) when available and configured.
+2. **Model fallback** — if the implementation uses a pinned model, the model-level fallback can use another compatible model on the same provider (e.g., `gpt-oss-20b` ↔ `Nemotron 3 Nano 30B A3B`), according to configuration.
+3. **Development fallback** — if no real provider is accessible (e.g., during local development or automated testing), `ai_service` uses the Mock AI Provider.
 
-Prinsipnya: fallback logic bersifat **configurable**, bukan hard-coded ke dalam business logic Laravel. Modul aplikasi memanggil `ai_service` tanpa mengetahui provider/model mana yang sedang aktif; `ai_service`-lah yang menangani retry dan fallback berdasarkan konfigurasi yang berlaku.
+The principle: fallback logic is **configurable**, not hardcoded into Laravel business logic. Application modules call `ai_service` without knowing which provider/model is currently active; `ai_service` handles retry and fallback based on the applicable configuration.
 
 ### 7.3 Environment Configuration
 
-Provider dan model dikonfigurasi melalui environment variables, bukan hard-coded di dalam business logic. Contoh konfigurasi konseptual:
+Provider and model are configured through environment variables, not hardcoded into business logic. Example conceptual configuration:
 
 ```
 AI_PROVIDER=openrouter
@@ -379,37 +379,37 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 FEATHERLESS_API_KEY=your_featherless_api_key
 ```
 
-Detail provider-specific (base URL, header autentikasi, format request/response) diisolasi di dalam implementation/configuration layer LLM Provider Abstraction (mis. per-provider adapter class di dalam `ai_service`), sehingga penggantian atau penambahan provider tidak membutuhkan perubahan pada modul aplikasi (Materials, Topics, Quiz, Learning State, dsb.).
+Provider-specific details (base URL, authentication headers, request/response format) are isolated inside the implementation/configuration layer of the LLM Provider Abstraction (e.g., per-provider adapter classes within `ai_service`), so replacing or adding a provider does not require changes to the application modules (Materials, Topics, Quiz, Learning State, etc.).
 
 ### 7.4 AI Service Responsibilities
 
-`ai_service` bertanggung jawab untuk:
+`ai_service` is responsible for:
 
-- membangun prompt;
-- memilih/mengonfigurasi provider (OpenRouter default, Featherless.ai opsional, Mock untuk dev/test);
-- memilih/mengonfigurasi model (default `openrouter/free`, atau pinned model bila dikonfigurasi);
-- mengirim AI request ke provider yang aktif;
-- menangani error dari provider;
-- menangani retry/fallback sesuai konfigurasi (Section 7.2);
-- memvalidasi structured output;
-- menormalisasi response dari provider menjadi format internal yang konsisten; dan
-- menyembunyikan detail implementasi provider-specific dari modul aplikasi.
+- building prompts;
+- selecting/configuring the provider (OpenRouter default, Featherless.ai optional, Mock for dev/test);
+- selecting/configuring the model (default `openrouter/free`, or a pinned model when configured);
+- sending AI requests to the active provider;
+- handling errors from the provider;
+- handling retry/fallback according to configuration (Section 7.2);
+- validating structured output;
+- normalizing provider responses into a consistent internal format; and
+- hiding provider-specific implementation details from the application modules.
 
-`ai_service` **tidak**:
+`ai_service` does **not**:
 
-- memiliki business state;
-- menulis langsung ke database;
-- menjadi microservice terpisah;
-- memiliki API publik; dan
-- berisi perhitungan learning-state yang bersifat application-specific.
+- hold business state;
+- write directly to the database;
+- be a separate microservice;
+- have a public API; and
+- contain learning-state calculations that are application-specific.
 
-Modul aplikasi Laravel tetap bertanggung jawab untuk:
+The Laravel application modules remain responsible for:
 
-- mempersist data;
-- menghitung skor quiz;
-- memperbarui mastery;
-- menentukan learning state; dan
-- menerapkan deterministic business rules.
+- persisting data;
+- calculating quiz scores;
+- updating mastery;
+- determining learning state; and
+- applying deterministic business rules.
 
 ### 7.5 Structured Output Flow
 
@@ -417,33 +417,33 @@ Modul aplikasi Laravel tetap bertanggung jawab untuk:
 LLM (Configured Provider — OpenRouter default / Featherless optional / Mock)
   ↓ raw output
 Structured JSON (schema: topics[], quiz_questions[], evaluation{verdict, feedback, subtopic})
-  ↓ divalidasi
-ai_service (parse + validate JSON shape; retry atau fallback ke provider/model lain sesuai konfigurasi jika invalid)
-  ↓ hasil bersih (data, bukan opini tentang state)
+  ↓ validated
+ai_service (parse + validate JSON shape; retry or fallback to another provider/model per configuration if invalid)
+  ↓ clean result (data, not opinions about state)
 Laravel (Application Modules: Processing, Quiz, Learning State)
-  ↓ menerapkan aturan deterministic
-Application Logic (persist topics, simpan quiz, hitung skor, update mastery/status)
+  ↓ applies deterministic rules
+Application Logic (persist topics, store quiz, calculate score, update mastery/status)
 ```
 
-Structured-output validation bekerja **independen dari provider/model** yang sedang digunakan — kontrak schema (`topics[]`, `quiz_questions[]`, `evaluation{}`) tetap sama apapun provider/model di baliknya. Apabila suatu provider/model tidak dapat secara reliable memenuhi kontrak structured-output tersebut, `ai_service` dapat retry atau menggunakan provider/model lain yang telah dikonfigurasi, sesuai strategi fallback pada Section 7.2.
+Structured-output validation works **independently of the provider/model** in use — the schema contract (`topics[]`, `quiz_questions[]`, `evaluation{}`) stays the same regardless of the provider/model behind it. If a provider/model cannot reliably satisfy that structured-output contract, `ai_service` can retry or use another configured provider/model, following the fallback strategy in Section 7.2.
 
-Sesuai Principle 8–10 Architecture Blueprint: **AI tidak pernah langsung menulis ke database atau menentukan Learning State.** `ai_service` hanya mengembalikan data terstruktur (mis. "jawaban ini benar", "ini masuk Subtopic X"); Laravel-lah yang menghitung skor, menentukan status (Needs Review/In Progress/Mastered) menggunakan formula deterministic tetap (<60% / 60–79% / ≥80%), dan mempersist hasilnya.
+Per Principles 8–10 of the Architecture Blueprint: **AI never writes directly to the database or determines the Learning State.** `ai_service` only returns structured data (e.g., "this answer is correct", "this maps to Subtopic X"); Laravel is the one that calculates the score, determines the status (Needs Review/In Progress/Mastered) using the fixed deterministic formula (<60% / 60–79% / ≥80%), and persists the results.
 
 ---
 
 ## 8. Background Processing
 
-**Evaluasi: Synchronous processing SUDAH CUKUP. Laravel Queue OPTIONAL, Redis NOT REQUIRED.**
+**Evaluation: Synchronous processing IS ALREADY SUFFICIENT. Laravel Queue OPTIONAL, Redis NOT REQUIRED.**
 
-*   Architecture Blueprint Section 15 & 17 secara eksplisit menetapkan "Synchronous processing (acceptable for hackathon file sizes)" sebagai keputusan MVP, dengan background worker/queue didaftarkan sebagai _future evolution_, bukan kebutuhan sekarang.
+*   Architecture Blueprint Sections 15 & 17 explicitly set "Synchronous processing (acceptable for hackathon file sizes)" as the MVP decision, with background workers/queues listed as _future evolution_, not a current requirement.
     
-*   Ukuran PDF materi kuliah (beberapa puluh halaman) dan pipeline yang didominasi operasi deterministic (extraction, cleaning, chunking) + satu panggilan AI (topic/subtopic identification) realistis selesai dalam hitungan detik hingga puluhan detik — cukup ditangani inline dalam satu request Laravel dengan **loading state yang jelas di frontend** ("Uploading Material... → Extracting Content... → Understanding Material... → Identifying Topics... → Preparing Study Material...").
+*   Course material PDFs (a few dozen pages) and a pipeline dominated by deterministic operations (extraction, cleaning, chunking) plus one AI call (topic/subtopic identification) realistically finish within seconds to tens of seconds — enough to be handled inline within a single Laravel request, with **clear loading states in the frontend** ("Uploading Material... → Extracting Content... → Understanding Material... → Identifying Topics... → Preparing Study Material...").
     
-*   Loading state wajib digunakan agar proses synchronous tidak terlihat seperti halaman freeze atau error ketika extraction dan AI processing membutuhkan waktu lebih lama selama demo.
+*   Loading states are mandatory so that the synchronous process does not look like a frozen page or an error when extraction and AI processing take longer during a demo.
     
-*   **Laravel Queue (OPTIONAL, bukan wajib):** jika saat testing ternyata upload+processing terasa terlalu lama untuk UX, queue dapat dipertimbangkan sebagai optimasi lanjutan. Untuk MVP, queue tidak menjadi bagian dari baseline implementation.
+*   **Laravel Queue (OPTIONAL, not required):** if testing shows that upload+processing feels too slow for the UX, a queue can be considered as a further optimization. For the MVP, a queue is not part of the baseline implementation.
     
-*   **Redis: NOT REQUIRED.** Tidak ada use case caching, rate-limiting kompleks, atau queue-throughput tinggi yang membenarkan penambahan Redis di 48 jam ini. Menambahkannya hanya menambah satu container Docker lagi tanpa manfaat terukur untuk MVP.
+*   **Redis: NOT REQUIRED.** There is no caching, complex rate-limiting, or high queue-throughput use case that justifies adding Redis in these 48 hours. Adding it would only introduce one more Docker container with no measurable benefit for the MVP.
 
 ---
 
@@ -454,7 +454,7 @@ studyback/
 ├── frontend/                 # React SPA (Home, My Materials, Workspace)
 ├── backend/                  # Laravel — modular monolith
 │   ├── app/
-│   │   ├── Modules/          # satu folder per modul arsitektur
+│   │   ├── Modules/          # one folder per architecture module
 │   │   │   ├── Materials/
 │   │   │   ├── Processing/
 │   │   │   ├── Topics/
@@ -462,26 +462,26 @@ studyback/
 │   │   │   ├── Quiz/
 │   │   │   └── LearningState/
 │   │   └── Services/
-│   │       └── AiOrchestrator.php   # in-process ai_service; satu-satunya caller ke configured LLM provider melalui provider abstraction
-│   └── ... (struktur Laravel standar)
-└── docs/                     # dokumen ini + Product Spec + System Architecture
+│   │       └── AiOrchestrator.php   # in-process ai_service; the only caller to the configured LLM provider through the provider abstraction
+│   └── ... (standard Laravel structure)
+└── docs/                     # this document + Product Spec + System Architecture
 ```
 
-`ai_service` tidak memiliki folder terpisah di root project. `ai_service` diimplementasikan sebagai **in-process Laravel service** melalui `AiOrchestrator.php` di dalam `backend/app/Services/`.
+`ai_service` has no separate folder at the project root. `ai_service` is implemented as an **in-process Laravel service** through `AiOrchestrator.php` inside `backend/app/Services/`.
 
-`AiOrchestrator.php` merupakan thin, stateless service yang bertanggung jawab untuk:
+`AiOrchestrator.php` is a thin, stateless service responsible for:
 
-* membangun prompt;
-* memilih/mengonfigurasi provider dan model melalui LLM Provider Abstraction;
-* memanggil configured external LLM provider (default: OpenRouter `openrouter/free`; opsional: Featherless.ai; dev/test: Mock AI Provider);
-* menangani retry/fallback sesuai konfigurasi; dan
-* memvalidasi structured output.
+* building prompts;
+* selecting/configuring the provider and model through the LLM Provider Abstraction;
+* calling the configured external LLM provider (default: OpenRouter `openrouter/free`; optional: Featherless.ai; dev/test: Mock AI Provider);
+* handling retry/fallback according to configuration; and
+* validating structured output.
 
-`AiOrchestrator.php` merupakan **single caller** ke external LLM provider — bukan ke satu provider tertentu, melainkan ke provider yang sedang dikonfigurasi melalui provider abstraction.
+`AiOrchestrator.php` is the **single caller** to the external LLM provider — not to a specific provider, but to whichever provider is currently configured through the provider abstraction.
 
-Folder tambahan di root hanya `docs/`. Tidak ada folder `ai_service/`, `workers/`, `queue/`, atau `services/` terpisah karena MVP tidak menggunakan background worker atau microservice terpisah.
+The only additional folder at the root is `docs/`. There are no separate `ai_service/`, `workers/`, `queue/`, or `services/` folders because the MVP does not use background workers or separate microservices.
 
-Modularitas diwujudkan melalui struktur folder di dalam `backend/`, bukan sebagai deployable unit terpisah. Struktur ini konsisten dengan keputusan **Modular Monolith** pada Architecture Section 2.
+Modularity is realized through the folder structure inside `backend/`, not as a separate deployable unit. This structure is consistent with the **Modular Monolith** decision in Architecture Section 2.
 
 
 ---
@@ -489,25 +489,25 @@ Modularitas diwujudkan melalui struktur folder di dalam `backend/`, bukan sebaga
 ## 10. Additional Technologies to Learn
 
 ### MUST LEARN
-- **`spatie/pdf-to-text` + Poppler-utils** — cara install di Dockerfile, cara handle jika binary gagal/PDF corrupt (untuk failure handling Section 13: "PDF extraction fails").
-- **Laravel Filesystem API** (`Storage::disk()`) — khususnya cara serve file lewat route terautentikasi (bukan file public), untuk memenuhi Security Section 14.
-- **OpenRouter API (OpenAI-compatible endpoint)** — format request/response, cara menggunakan route `openrouter/free`, cara memaksa/mendorong structured JSON output (system prompt + schema instruction), serta rate limit pada free tier.
-- **Laravel Sanctum** — jika belum pernah pakai, ini auth paling ringan untuk SPA + API token, sesuai kebutuhan Section 14.
-- **Environment-based configuration untuk AI provider** — cara mengisolasi konfigurasi provider (`AI_PROVIDER`, `AI_MODEL`, API key per provider) di luar business logic, agar penggantian provider tidak membutuhkan perubahan kode pada modul aplikasi.
+- **`spatie/pdf-to-text` + Poppler-utils** — how to install in the Dockerfile, how to handle binary failures/corrupt PDFs (for failure handling Section 13: "PDF extraction fails").
+- **Laravel Filesystem API** (`Storage::disk()`) — especially how to serve files through an authenticated route (not public files), to satisfy Security Section 14.
+- **OpenRouter API (OpenAI-compatible endpoint)** — request/response format, how to use the `openrouter/free` route, how to force/encourage structured JSON output (system prompt + schema instruction), and rate limits on the free tier.
+- **Laravel Sanctum** — if you have never used it, this is the lightest auth option for an SPA + API tokens, matching the Section 14 requirements.
+- **Environment-based configuration for the AI provider** — how to isolate provider configuration (`AI_PROVIDER`, `AI_MODEL`, per-provider API keys) outside business logic, so swapping providers does not require code changes in the application modules.
 
 ### SHOULD LEARN
-- **Featherless API (OpenAI-compatible endpoint)** — dipelajari sebagai provider opsional, terutama jika inference credits dari hackathon berhasil diklaim.
-- **Laravel Queue dengan driver `database`** — berguna sebagai jaring pengaman jika processing time ternyata jadi masalah UX saat demo, tanpa perlu belajar Redis.
-- **Validasi JSON Schema di PHP** (mis. `justinrainbow/json-schema` atau validasi manual array shape) — untuk memvalidasi structured output dari LLM sebelum dipersist, sesuai failure handling Section 13.
-- **PostgreSQL full-text search dasar** (`tsvector`) — opsional untuk mempercepat/mempermudah query filter-based retrieval jika volume chunk per material besar; bukan pengganti vector DB, hanya optimisasi index.
+- **Featherless API (OpenAI-compatible endpoint)** — studied as an optional provider, especially if the hackathon inference credits are successfully claimed.
+- **Laravel Queue with the `database` driver** — useful as a safety net if processing time turns out to be a UX problem during the demo, without needing to learn Redis.
+- **JSON Schema validation in PHP** (e.g., `justinrainbow/json-schema` or manual array-shape validation) — to validate structured output from the LLM before persisting, per failure handling Section 13.
+- **Basic PostgreSQL full-text search** (`tsvector`) — optional for speeding up/simplifying filter-based retrieval queries when the chunk volume per material is large; not a replacement for a vector DB, only an index optimization.
 
 ### NOT NEEDED
-- **Vector database (pgvector, Pinecone, Weaviate, dll.)** — di luar scope, sudah divalidasi di Section 6.
-- **Redis** — sudah divalidasi di Section 8.
-- **Message broker (RabbitMQ, Kafka, SQS)** — tidak relevan untuk single-instance modular monolith 48 jam.
-- **Object storage SDK (AWS S3, GCS)** — hanya diperlukan jika keputusan hosting berubah (lihat Section 5); jangan dipelajari lebih dulu sebelum keputusan itu dibuat.
-- **OCR (Tesseract, dsb.)** — di luar scope MVP (PDF berbasis teks, bukan scan).
-- **Fine-tuning / training model sendiri** — eksplisit di-cut di Product Spec Section 12 ("Custom/fine-tuned AI model").
+- **Vector database (pgvector, Pinecone, Weaviate, etc.)** — out of scope, already validated in Section 6.
+- **Redis** — already validated in Section 8.
+- **Message broker (RabbitMQ, Kafka, SQS)** — not relevant for a single-instance modular monolith within 48 hours.
+- **Object storage SDK (AWS S3, GCS)** — only needed if the hosting decision changes (see Section 5); do not study them before that decision is made.
+- **OCR (Tesseract, etc.)** — out of the MVP scope (text-based PDFs, not scans).
+- **Fine-tuning / training your own model** — explicitly cut in Product Spec Section 12 ("Custom/fine-tuned AI model").
 
 ---
 
@@ -523,78 +523,78 @@ Modularitas diwujudkan melalui struktur folder di dalam `backend/`, bukan sebaga
 | PDF Extraction          | `spatie/pdf-to-text` (Poppler), fallback `smalot/pdfparser`                                                        |
 | Chunking                | PHP native, deterministic fixed-length (~1,000 characters + ~200 characters overlap)                               |
 | RAG/Retrieval           | PostgreSQL filter query (material_id + topic_id)                                                                   |
-| AI Integration Layer   | `ai_service` — thin, stateless, in-process Laravel service; satu-satunya caller ke configured LLM provider melalui LLM Provider Abstraction |
+| AI Integration Layer   | `ai_service` — thin, stateless, in-process Laravel service; the only caller to the configured LLM provider through the LLM Provider Abstraction |
 | Default AI Provider    | OpenRouter                                                                                                          |
-| Default AI Route/Model | `openrouter/free` — free-model router, dynamically memilih model gratis yang tersedia                             |
-| Optional AI Provider   | Featherless.ai — hackathon partner, digunakan jika dikonfigurasi dan credits tersedia                              |
+| Default AI Route/Model | `openrouter/free` — free-model router, dynamically selects available free models                             |
+| Optional AI Provider   | Featherless.ai — hackathon partner, used if configured and credits are available                              |
 | Dev/Test AI Provider   | Mock AI Provider                                                                                                    |
-| Pinned Model (opsional)| mis. `gpt-oss-20b`, `Nemotron 3 Nano 30B A3B` — hanya jika deterministic selection dibutuhkan dan tersedia          |
-| Background Processing  | Synchronous (inline); Laravel Queue `database` driver sebagai opsi cadangan                                        |
-| Redis                   | Tidak digunakan                                                                                                     |
-| Vector Database        | Tidak digunakan                                                                                                     |
+| Pinned Model (optional)| e.g. `gpt-oss-20b`, `Nemotron 3 Nano 30B A3B` — only if deterministic selection is needed and available          |
+| Background Processing  | Synchronous (inline); Laravel Queue `database` driver as a backup option                                        |
+| Redis                   | Not used                                                                                                     |
+| Vector Database        | Not used                                                                                                     |
 | Containerization        | Docker + docker-compose (frontend, backend, db)                                                                    |
 | API Communication       | REST/JSON                                                                                                           |
 | AI Communication        | HTTPS REST/JSON, OpenAI-compatible (`ai_service` → LLM Provider Abstraction → configured provider)                 |
 
 ### Chunking Strategy
 
-Chunking menggunakan **fixed-length chunking** dengan target:
+Chunking uses **fixed-length chunking** with the following targets:
 
 * Chunk length: **~1,000 characters**
 * Chunk overlap: **~200 characters**
 
-Heading-based atau heading-regex chunking **tidak digunakan**.
+Heading-based or heading-regex chunking is **not used**.
 
-Chunking bersifat deterministic dan dilakukan sebelum topic identification.
+Chunking is deterministic and is performed before topic identification.
 
 ### AI Provider & Model Strategy
 
-Studyback menggunakan konfigurasi AI yang **provider-agnostic**, bukan fixed ke satu provider/model:
+Studyback uses a **provider-agnostic** AI configuration, not fixed to a single provider/model:
 
 * **Default provider:** OpenRouter
 * **Default route:** `openrouter/free`
-* **Optional provider:** Featherless.ai (hackathon partner, jika dikonfigurasi dan credits tersedia)
+* **Optional provider:** Featherless.ai (hackathon partner, if configured and credits are available)
 * **Dev/test provider:** Mock AI Provider
-* **Optional pinned model:** mis. `gpt-oss-20b` atau `Nemotron 3 Nano 30B A3B`, hanya jika deterministic model selection dibutuhkan dan model tersedia pada provider/plan yang dikonfigurasi
+* **Optional pinned model:** e.g. `gpt-oss-20b` or `Nemotron 3 Nano 30B A3B`, only if deterministic model selection is needed and the model is available on the configured provider/plan
 
-`openrouter/free` digunakan sebagai default route untuk seluruh AI use case pada MVP (topic extraction, quiz generation, Teach Me, answer evaluation). Task-specific pinned model mapping, jika digunakan, bersifat opsional dan didokumentasikan sebagai optimisasi pada AI Architecture document — bukan sebagai baseline Tech Stack yang wajib.
+`openrouter/free` is used as the default route for all AI use cases in the MVP (topic extraction, quiz generation, Teach Me, answer evaluation). Task-specific pinned model mapping, if used, is optional and documented as an optimization in the AI Architecture document — not as a mandatory Tech Stack baseline.
 
-Fallback mengikuti strategi berlapis (provider fallback → model fallback → development fallback) sebagaimana didefinisikan pada Section 7.2, dan bersifat configurable, bukan hard-coded ke dalam business logic.
+Fallback follows the layered strategy (provider fallback → model fallback → development fallback) as defined in Section 7.2, and is configurable rather than hardcoded into business logic.
 
 ### `ai_service` Architecture
 
-`ai_service` merupakan **in-process Laravel service**, bukan service atau container terpisah.
+`ai_service` is an **in-process Laravel service**, not a separate service or container.
 
-`ai_service` bertanggung jawab untuk:
+`ai_service` is responsible for:
 
-* membangun prompt;
-* memilih/mengonfigurasi provider dan model melalui LLM Provider Abstraction;
-* mengirim request ke configured external LLM provider;
-* menangani retry/fallback sesuai konfigurasi;
-* memvalidasi structured output; dan
-* menyediakan abstraction layer antara business logic Laravel dan AI provider — sehingga business logic tidak pernah bergantung langsung pada OpenRouter, Featherless, atau model tertentu.
+* building prompts;
+* selecting/configuring the provider and model through the LLM Provider Abstraction;
+* sending requests to the configured external LLM provider;
+* handling retry/fallback according to configuration;
+* validating structured output; and
+* providing an abstraction layer between Laravel business logic and the AI provider — so business logic never depends directly on OpenRouter, Featherless, or a specific model.
 
-Tidak terdapat komunikasi REST antara Laravel dengan `ai_service` karena keduanya berada dalam proses aplikasi Laravel yang sama.
+There is no REST communication between Laravel and `ai_service` because both are within the same Laravel application process.
 
-Arsitektur AI:
+AI architecture:
 
 **React → Laravel API → `ai_service` → LLM Provider Abstraction → Configured External LLM Provider**
 
-Jika default provider/route gagal atau timeout:
+If the default provider/route fails or times out:
 
-**`ai_service` → provider/model fallback sesuai konfigurasi (mis. retry pada `openrouter/free`, lalu Featherless.ai jika dikonfigurasi, lalu Mock AI Provider pada environment development)**
+**`ai_service` → provider/model fallback per configuration (e.g., retry on `openrouter/free`, then Featherless.ai if configured, then the Mock AI Provider in a development environment)**
 
 
-Stack ini siap menjadi dasar untuk tahap berikutnya:
+This stack is ready to serve as the foundation for the next phase:
 
 ```
-Tech Stack (dokumen ini)
+Tech Stack (this document)
   ↓
-Database Design       — schema untuk materials, topics, subtopics, chunks, sessions, quizzes, learning_state
+Database Design       — schema for materials, topics, subtopics, chunks, sessions, quizzes, learning_state
   ↓
-API Design            — route/contract per modul (Materials, Processing, StudySession, Quiz, LearningState)
+API Design            — route/contract per module (Materials, Processing, StudySession, Quiz, LearningState)
   ↓
-AI Architecture        — prompt template per capability (explain, quiz, evaluate, extract), JSON schema per capability, serta detail task-specific model mapping (opsional)
+AI Architecture        — prompt template per capability (explain, quiz, evaluate, extract), JSON schema per capability, and task-specific model mapping details (optional)
   ↓
 UI/UX Design           — Home, My Materials, Material Detail, Study Session Config (modal), Studyback Workspace
 ```

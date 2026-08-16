@@ -27,22 +27,22 @@
 
 ## 1. Database Design Overview
 
-### Tujuan
+### Purpose
 
-Dokumen ini adalah **Database Design Document (DDD) final** untuk Studyback. DDD ini menerjemahkan Product Specification, System Architecture Blueprint, dan Tech Stack Specification menjadi schema PostgreSQL yang konkret dan siap diimplementasikan langsung sebagai Laravel migrations, Eloquent models, relationships, constraints, dan indexes.
+This document is the **final Database Design Document (DDD)** for Studyback. This DDD translates the Product Specification, System Architecture Blueprint, and Tech Stack Specification into a concrete PostgreSQL schema that is ready to be implemented directly as Laravel migrations, Eloquent models, relationships, constraints, and indexes.
 
 ### Scope
 
-Schema mencakup seluruh entity yang dibutuhkan untuk mendukung empat core flow (New Material Flow, Existing Material Flow, Teach Me, Quiz Me, Review Weak Topics, Guided Study Session) serta Adaptive Learning Loop (Learn → Test → Evaluate → Review). Schema **tidak** mencakup entity yang tidak didukung oleh ketiga source document — termasuk vector storage, embedding, cache layer, queue/job table, atau tabel percakapan (chat log) yang tidak dipersyaratkan secara eksplisit di MVP scope manapun.
+The schema covers all entities needed to support the four core flows (New Material Flow, Existing Material Flow, Teach Me, Quiz Me, Review Weak Topics, Guided Study Session) as well as the Adaptive Learning Loop (Learn → Test → Evaluate → Review). The schema does **not** include entities not supported by the three source documents — including vector storage, embeddings, cache layers, queue/job tables, or conversation (chat log) tables that are not explicitly required in any MVP scope.
 
-### Prinsip Database
+### Database Principles
 
-1. **PostgreSQL sebagai single application database** — tidak ada database sekunder, tidak ada vector database.
-2. **Laravel adalah satu-satunya pemilik state** — AI (`ai_service`) tidak pernah menulis langsung ke database; seluruh write dilakukan oleh Application Modules setelah menerima structured output dari AI.
-3. **Learning State bersifat deterministic** — mastery/status dihitung oleh Learning State logic di Laravel menggunakan formula tetap, bukan oleh LLM.
-4. **Retrieval berbasis filter, bukan similarity search** — chunk diambil melalui `WHERE material_id = ? AND topic_id = ?` (atau `subtopic_id`), didukung index reguler, bukan vector index.
-5. **Skema sederhana untuk 48 jam** — setiap tabel harus punya alasan langsung dari salah satu dari tiga source document; tidak ada tabel spekulatif.
-6. **Ownership eksplisit** — setiap baris data yang bersifat personal (material dan seluruh data turunannya) dapat ditelusuri ke `users.id` pemiliknya melalui foreign key chain, mendukung authorization di level Laravel.
+1. **PostgreSQL as the single application database** — no secondary database, no vector database.
+2. **Laravel is the sole owner of state** — AI (`ai_service`) never writes directly to the database; all writes are performed by the Application Modules after receiving structured output from the AI.
+3. **Learning State is deterministic** — mastery/status is calculated by the Learning State logic in Laravel using a fixed formula, not by the LLM.
+4. **Filter-based retrieval, not similarity search** — chunks are fetched via `WHERE material_id = ? AND topic_id = ?` (or `subtopic_id`), backed by regular indexes, not vector indexes.
+5. **Simple schema for 48 hours** — every table must have a direct justification from one of the three source documents; no speculative tables.
+6. **Explicit ownership** — every row of personal data (material and all of its derived data) can be traced back to its owner's `users.id` through the foreign key chain, supporting authorization at the Laravel level.
 
 ---
 
@@ -50,16 +50,16 @@ Schema mencakup seluruh entity yang dibutuhkan untuk mendukung empat core flow (
 
 | Module (Architecture Blueprint §5) | Tables | Responsibility |
 |---|---|---|
-| **Auth** | `users` | Identitas user; dasar dari seluruh ownership scoping. |
+| **Auth** | `users` | User identity; the basis for all ownership scoping. |
 | **Materials** | `materials` | Material Library CRUD, Material Detail assembly, Download Material metadata. |
-| **Processing** | `materials` (status columns), `topics`, `subtopics`, `chunks` | Persist hasil pipeline: extract → chunk → topic/subtopic identification. |
-| **Topics** | `topics`, `subtopics` | Struktur topic/subtopic dan status/mastery untuk sidebar Learning Map. |
-| **Study Session** | `study_sessions`, `study_session_topics` | Konfigurasi sesi (topics dipilih, mode, difficulty) dan koneksi ke mode belajar aktif. |
-| **AI Orchestration (`ai_service`)** | *(tidak ada tabel)* | `ai_service` bersifat thin & stateless — tidak pernah mempersist apa pun; hanya mengembalikan data terstruktur ke module pemanggil. |
-| **Quiz** | `quizzes`, `quiz_questions`, `quiz_answers` | Simpan quiz yang dihasilkan AI (setelah divalidasi), jawaban user, dan hasil evaluasi. |
-| **Learning State** | `subtopics` (mastery/status columns), dibaca bersama `quiz_answers` sebagai historical log | Mastery & status disimpan sebagai current-state pada `subtopics`; histori attempt secara alami tersimpan di `quiz_answers`/`quiz_questions` tanpa tabel terpisah. |
+| **Processing** | `materials` (status columns), `topics`, `subtopics`, `chunks` | Persists pipeline results: extract → chunk → topic/subtopic identification. |
+| **Topics** | `topics`, `subtopics` | Topic/subtopic structure and status/mastery for the sidebar Learning Map. |
+| **Study Session** | `study_sessions`, `study_session_topics` | Session configuration (selected topics, mode, difficulty) and connection to the active learning mode. |
+| **AI Orchestration (`ai_service`)** | *(no tables)* | `ai_service` is thin & stateless — it never persists anything; it only returns structured data to the calling module. |
+| **Quiz** | `quizzes`, `quiz_questions`, `quiz_answers` | Stores AI-generated quizzes (after validation), user answers, and evaluation results. |
+| **Learning State** | `subtopics` (mastery/status columns), read together with `quiz_answers` as a historical log | Mastery & status are stored as current state on `subtopics`; attempt history is naturally stored in `quiz_answers`/`quiz_questions` without a separate table. |
 
-> **Design Decision:** Tidak ada tabel `learning_state_events` terpisah. Architecture Blueprint §9 mensyaratkan "history of quiz attempts/scores contributing to the score" — kebutuhan ini sudah terpenuhi oleh `quiz_answers` (join ke `quiz_questions.subtopic_id`), sehingga menambahkan tabel log terpisah hanya akan menduplikasi data yang sudah immutable di `quiz_answers`. Ini konsisten dengan Quality Rule #10 (skema sederhana untuk hackathon 48 jam).
+> **Design Decision:** There is no separate `learning_state_events` table. Architecture Blueprint §9 requires "history of quiz attempts/scores contributing to the score" — this requirement is already satisfied by `quiz_answers` (joined to `quiz_questions.subtopic_id`), so adding a separate log table would only duplicate data that is already immutable in `quiz_answers`. This is consistent with Quality Rule #10 (simple schema for a 48-hour hackathon).
 
 ---
 
@@ -67,37 +67,37 @@ Schema mencakup seluruh entity yang dibutuhkan untuk mendukung empat core flow (
 
 | Entity | Purpose | Module | Owner |
 |---|---|---|---|
-| `users` | Identitas & autentikasi; root ownership seluruh data | Auth | Laravel (Sanctum) |
-| `materials` | Metadata materi upload (judul, file, status processing) | Materials / Processing | Laravel |
-| `topics` | Konsep tingkat atas hasil identifikasi AI dalam satu material | Topics / Processing | AI (identify) → Laravel (persist) |
-| `subtopics` | Unit pembelajaran granular; menyimpan mastery & status saat ini | Topics / Learning State | AI (identify) → Laravel (persist & update) |
-| `chunks` | Potongan teks material (fixed-length) untuk retrieval/RAG | Processing / Retrieval | Laravel (deterministic) + AI (tagging topic/subtopic) |
-| `study_sessions` | Satu sesi belajar (mode, difficulty, waktu mulai/selesai) | Study Session | Laravel |
-| `study_session_topics` | Pivot topic mana saja yang dipilih dalam satu study session | Study Session | Laravel |
-| `quizzes` | Satu instance quiz (scope topic/subtopic, hasil agregat) | Quiz | AI (generate) → Laravel (validate, store, score) |
-| `quiz_questions` | Pertanyaan quiz individual + jawaban benar & target subtopic | Quiz | AI (generate) → Laravel (validate & persist) |
-| `quiz_answers` | Jawaban user per pertanyaan + hasil evaluasi AI | Quiz / Learning State | AI (evaluate) → Laravel (persist & score) |
+| `users` | Identity & authentication; root ownership of all data | Auth | Laravel (Sanctum) |
+| `materials` | Metadata of uploaded material (title, file, processing status) | Materials / Processing | Laravel |
+| `topics` | Top-level concepts from AI identification within one material | Topics / Processing | AI (identify) → Laravel (persist) |
+| `subtopics` | Granular learning units; stores current mastery & status | Topics / Learning State | AI (identify) → Laravel (persist & update) |
+| `chunks` | Fixed-length text segments of the material for retrieval/RAG | Processing / Retrieval | Laravel (deterministic) + AI (topic/subtopic tagging) |
+| `study_sessions` | One study session (mode, difficulty, start/end time) | Study Session | Laravel |
+| `study_session_topics` | Pivot of which topics are selected in one study session | Study Session | Laravel |
+| `quizzes` | One quiz instance (topic/subtopic scope, aggregate result) | Quiz | AI (generate) → Laravel (validate, store, score) |
+| `quiz_questions` | Individual quiz question + correct answer & target subtopic | Quiz | AI (generate) → Laravel (validate & persist) |
+| `quiz_answers` | User's answer per question + AI evaluation result | Quiz / Learning State | AI (evaluate) → Laravel (persist & score) |
 
-Tidak ada tabel terpisah untuk "Material Processing" (dipersist sebagai kolom status pada `materials`, lihat §7 dan §10) dan tidak ada tabel percakapan/chat log (Teach Me bersifat request/response yang di-generate langsung dari retrieval setiap kali, tidak dipersyaratkan untuk disimpan oleh source manapun).
+There is no separate table for "Material Processing" (persisted as status columns on `materials`, see §7 and §10) and no conversation/chat log table (Teach Me is a request/response generated directly from retrieval each time and is not required to be stored by any source).
 
 ---
 
 ## 4. Database Schema
 
-Seluruh tabel menggunakan `id BIGSERIAL PRIMARY KEY` kecuali dinyatakan lain, dan menggunakan `created_at` / `updated_at` (`TIMESTAMP`) mengikuti konvensi Laravel `timestamps()`, kecuali dinyatakan sebagai immutable log (hanya `created_at`).
+All tables use `id BIGSERIAL PRIMARY KEY` unless stated otherwise, and use `created_at` / `updated_at` (`TIMESTAMP`) following the Laravel `timestamps()` convention, except where stated as immutable logs (only `created_at`).
 
 ### `users`
 
-> **Design Decision:** Tabel standar Laravel + Sanctum. Ketiga source document menyatakan autentikasi/otorisasi "tetap dikontrol oleh Laravel" tanpa merinci provider di luar Sanctum (Tech Stack §3), sehingga schema mengikuti struktur default Laravel `users` table. Tabel `personal_access_tokens` disediakan otomatis oleh migration bawaan Sanctum dan tidak didesain ulang di sini.
+> **Design Decision:** Standard Laravel + Sanctum table. All three source documents state that authentication/authorization "remains controlled by Laravel" without specifying a provider beyond Sanctum (Tech Stack §3), so the schema follows the default Laravel `users` table structure. The `personal_access_tokens` table is provided automatically by the built-in Sanctum migration and is not redesigned here.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas user |
-| name | VARCHAR(255) | No | — | — | Nama user |
-| email | VARCHAR(255) | No | — | UNIQUE | Email login |
-| email_verified_at | TIMESTAMP | Yes | NULL | — | Timestamp verifikasi email |
-| password | VARCHAR(255) | No | — | — | Password ter-hash |
-| remember_token | VARCHAR(100) | Yes | NULL | — | Token "remember me" |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | User identity |
+| name | VARCHAR(255) | No | — | — | User name |
+| email | VARCHAR(255) | No | — | UNIQUE | Login email |
+| email_verified_at | TIMESTAMP | Yes | NULL | — | Email verification timestamp |
+| password | VARCHAR(255) | No | — | — | Hashed password |
+| remember_token | VARCHAR(100) | Yes | NULL | — | "Remember me" token |
 | created_at | TIMESTAMP | No | now() | — | — |
 | updated_at | TIMESTAMP | No | now() | — | — |
 
@@ -107,19 +107,19 @@ Seluruh tabel menggunakan `id BIGSERIAL PRIMARY KEY` kecuali dinyatakan lain, da
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas material |
-| user_id | BIGINT | No | — | FK → `users.id`, ON DELETE CASCADE | Pemilik material |
-| title | VARCHAR(255) | No | — | — | Nama material (Material Information) |
-| description | TEXT | Yes | NULL | — | Deskripsi singkat material |
-| original_filename | VARCHAR(255) | No | — | — | Nama file asli untuk Download Material |
-| file_path | VARCHAR(500) | No | — | UNIQUE | Path internal di Laravel Filesystem (`storage/app/private`), tidak mudah ditebak |
-| file_size_bytes | INTEGER | No | — | CHECK (file_size_bytes > 0) | Ukuran file PDF |
-| status | VARCHAR(20) | No | `'processing'` | CHECK (status IN ('processing','ready','failed')) | Status pipeline pemrosesan material |
-| failed_reason | TEXT | Yes | NULL | — | Pesan error saat status = 'failed' |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Material identity |
+| user_id | BIGINT | No | — | FK → `users.id`, ON DELETE CASCADE | Material owner |
+| title | VARCHAR(255) | No | — | — | Material name (Material Information) |
+| description | TEXT | Yes | NULL | — | Short material description |
+| original_filename | VARCHAR(255) | No | — | — | Original file name for Download Material |
+| file_path | VARCHAR(500) | No | — | UNIQUE | Internal path in Laravel Filesystem (`storage/app/private`), hard to guess |
+| file_size_bytes | INTEGER | No | — | CHECK (file_size_bytes > 0) | PDF file size |
+| status | VARCHAR(20) | No | `'processing'` | CHECK (status IN ('processing','ready','failed')) | Material processing pipeline status |
+| failed_reason | TEXT | Yes | NULL | — | Error message when status = 'failed' |
 | created_at | TIMESTAMP | No | now() | — | Upload date |
 | updated_at | TIMESTAMP | No | now() | — | — |
 
-> **Design Decision:** Product Spec §3 menampilkan tahapan UI granular ("Uploading… → Extracting Content… → Understanding Material… → Identifying Topics…"), tetapi karena Tech Stack §8 menetapkan **synchronous processing** (seluruh pipeline berjalan inline dalam satu request), tahapan tersebut adalah *ephemeral frontend state*, bukan state yang perlu dipersist di database. Database hanya menyimpan state final yang relevan untuk query & failure handling: `processing` (sedang berjalan / baru mulai), `ready` (berhasil, Architecture §13: "No partial material is marked Ready"), `failed` (gagal di titik manapun dalam pipeline).
+> **Design Decision:** Product Spec §3 displays granular UI stages ("Uploading… → Extracting Content… → Understanding Material… → Identifying Topics…"), but because Tech Stack §8 establishes **synchronous processing** (the entire pipeline runs inline within a single request), those stages are *ephemeral frontend state*, not state that needs to be persisted in the database. The database only stores the final states relevant for querying and failure handling: `processing` (running / just started), `ready` (successful, Architecture §13: "No partial material is marked Ready"), `failed` (failed at any point in the pipeline).
 
 ---
 
@@ -127,15 +127,15 @@ Seluruh tabel menggunakan `id BIGSERIAL PRIMARY KEY` kecuali dinyatakan lain, da
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas topic |
-| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material pemilik topic |
-| name | VARCHAR(255) | No | — | — | Nama topic (hasil AI topic extraction) |
-| description | TEXT | Yes | NULL | — | Deskripsi singkat topic |
-| order_index | SMALLINT | No | 0 | — | Urutan tampil di sidebar |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Topic identity |
+| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material owning the topic |
+| name | VARCHAR(255) | No | — | — | Topic name (result of AI topic extraction) |
+| description | TEXT | Yes | NULL | — | Short topic description |
+| order_index | SMALLINT | No | 0 | — | Display order in the sidebar |
 | created_at | TIMESTAMP | No | now() | — | — |
 | updated_at | TIMESTAMP | No | now() | — | — |
 
-Constraint tambahan: `UNIQUE (material_id, name)` — mencegah duplikasi nama topic dalam satu material.
+Additional constraint: `UNIQUE (material_id, name)` — prevents duplicate topic names within one material.
 
 ---
 
@@ -143,19 +143,19 @@ Constraint tambahan: `UNIQUE (material_id, name)` — mencegah duplikasi nama to
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas subtopic |
-| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic pemilik subtopic |
-| name | VARCHAR(255) | No | — | — | Nama subtopic |
-| description | TEXT | Yes | NULL | — | Deskripsi singkat subtopic |
-| order_index | SMALLINT | No | 0 | — | Urutan tampil di sidebar |
-| mastery_score | NUMERIC(5,2) | No | 0 | CHECK (mastery_score BETWEEN 0 AND 100) | Skor mastery saat ini (Learning State) |
-| status | VARCHAR(20) | No | `'not_started'` | CHECK (status IN ('not_started','in_progress','needs_review','mastered')) | Status belajar saat ini |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Subtopic identity |
+| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic owning the subtopic |
+| name | VARCHAR(255) | No | — | — | Subtopic name |
+| description | TEXT | Yes | NULL | — | Short subtopic description |
+| order_index | SMALLINT | No | 0 | — | Display order in the sidebar |
+| mastery_score | NUMERIC(5,2) | No | 0 | CHECK (mastery_score BETWEEN 0 AND 100) | Current mastery score (Learning State) |
+| status | VARCHAR(20) | No | `'not_started'` | CHECK (status IN ('not_started','in_progress','needs_review','mastered')) | Current learning status |
 | created_at | TIMESTAMP | No | now() | — | — |
-| updated_at | TIMESTAMP | No | now() | Diperbarui setiap kali Learning State Engine menghitung ulang mastery | Timestamp update mastery terakhir |
+| updated_at | TIMESTAMP | No | now() | Updated every time the Learning State Engine recalculates mastery | Timestamp of the last mastery update |
 
-Constraint tambahan: `UNIQUE (topic_id, name)`.
+Additional constraint: `UNIQUE (topic_id, name)`.
 
-> **Design Decision:** Product Spec §8.2 menyatakan mastery disimpan **terutama pada level Subtopic** — inilah tabel yang menjadi pusat Learning State. `mastery_score` dan `status` disimpan langsung sebagai kolom current-state (bukan tabel terpisah) agar sidebar Learning Map bisa dibaca dengan query sederhana tanpa agregasi berat pada setiap render.
+> **Design Decision:** Product Spec §8.2 states that mastery is stored **primarily at the Subtopic level** — this table is the center of the Learning State. `mastery_score` and `status` are stored directly as current-state columns (not a separate table) so the sidebar Learning Map can be read with a simple query without heavy aggregation on every render.
 
 ---
 
@@ -163,17 +163,17 @@ Constraint tambahan: `UNIQUE (topic_id, name)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas chunk |
-| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material asal chunk |
-| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic hasil AI tagging |
-| subtopic_id | BIGINT | Yes | NULL | FK → `subtopics.id`, ON DELETE SET NULL | Subtopic hasil AI tagging (jika teridentifikasi) |
-| content | TEXT | No | — | — | Isi teks chunk (~1.000 karakter + ~200 overlap) |
-| chunk_index | INTEGER | No | — | — | Urutan chunk di dalam material (0-based) |
-| created_at | TIMESTAMP | No | now() | — | Chunk bersifat immutable, tidak ada `updated_at` |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Chunk identity |
+| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material the chunk belongs to |
+| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic from AI tagging |
+| subtopic_id | BIGINT | Yes | NULL | FK → `subtopics.id`, ON DELETE SET NULL | Subtopic from AI tagging (if identified) |
+| content | TEXT | No | — | — | Chunk text content (~1,000 characters + ~200 overlap) |
+| chunk_index | INTEGER | No | — | — | Chunk order within the material (0-based) |
+| created_at | TIMESTAMP | No | now() | — | Chunks are immutable; no `updated_at` |
 
-Constraint tambahan: `UNIQUE (material_id, chunk_index)`.
+Additional constraint: `UNIQUE (material_id, chunk_index)`.
 
-> **Design Decision:** `chunks` hanya dipersist **setelah** pipeline processing berhasil sepenuhnya (extraction → cleaning → chunking → topic identification) dalam satu transaction (lihat §15), sehingga `topic_id` selalu terisi (NOT NULL) pada saat commit — konsisten dengan Architecture §13: "No partial material is marked Ready." `subtopic_id` tetap nullable karena AI topic identification (Tech Stack §3, Architecture §6) hanya wajib menghasilkan struktur topic/subtopic secara umum; tidak setiap chunk pasti bisa dipetakan setepat level subtopic, sehingga fallback ke level topic tetap valid untuk retrieval.
+> **Design Decision:** `chunks` are only persisted **after** the processing pipeline has fully succeeded (extraction → cleaning → chunking → topic identification) within a single transaction (see §15), so `topic_id` is always populated (NOT NULL) at commit time — consistent with Architecture §13: "No partial material is marked Ready." `subtopic_id` remains nullable because AI topic identification (Tech Stack §3, Architecture §6) is only required to produce a topic/subtopic structure in general; not every chunk can necessarily be mapped at the subtopic level of precision, so falling back to the topic level remains valid for retrieval.
 
 ---
 
@@ -181,18 +181,18 @@ Constraint tambahan: `UNIQUE (material_id, chunk_index)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas study session |
-| user_id | BIGINT | No | — | FK → `users.id`, ON DELETE CASCADE | Pemilik sesi |
-| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material yang dipelajari |
-| mode | VARCHAR(30) | No | — | CHECK (mode IN ('teach_me','quiz_me','review_weak_topics','guided_study_session')) | Learning Mode yang dipilih |
-| difficulty | VARCHAR(10) | Yes | NULL | CHECK (difficulty IN ('easy','medium','hard')) | Difficulty (relevan untuk mode yang melibatkan quiz) |
-| status | VARCHAR(20) | No | `'active'` | CHECK (status IN ('active','completed')) | Status sesi |
-| started_at | TIMESTAMP | No | now() | — | Waktu mulai sesi |
-| ended_at | TIMESTAMP | Yes | NULL | — | Waktu sesi berakhir |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Study session identity |
+| user_id | BIGINT | No | — | FK → `users.id`, ON DELETE CASCADE | Session owner |
+| material_id | BIGINT | No | — | FK → `materials.id`, ON DELETE CASCADE | Material being studied |
+| mode | VARCHAR(30) | No | — | CHECK (mode IN ('teach_me','quiz_me','review_weak_topics','guided_study_session')) | Selected Learning Mode |
+| difficulty | VARCHAR(10) | Yes | NULL | CHECK (difficulty IN ('easy','medium','hard')) | Difficulty (relevant for modes that involve quizzes) |
+| status | VARCHAR(20) | No | `'active'` | CHECK (status IN ('active','completed')) | Session status |
+| started_at | TIMESTAMP | No | now() | — | Session start time |
+| ended_at | TIMESTAMP | Yes | NULL | — | Session end time |
 | created_at | TIMESTAMP | No | now() | — | — |
 | updated_at | TIMESTAMP | No | now() | — | — |
 
-> **Design Decision:** Product Spec §7 menegaskan seluruh Learning Mode (Teach Me, Quiz Me, Review Weak Topics, Guided Study Session) berada di **satu Workspace yang sama** — tidak ada halaman terpisah. `study_sessions.mode` merepresentasikan hal ini sebagai satu baris per sesi, bukan sebagai tabel terpisah per mode.
+> **Design Decision:** Product Spec §7 asserts that all Learning Modes (Teach Me, Quiz Me, Review Weak Topics, Guided Study Session) exist in the **same Workspace** — there are no separate pages. `study_sessions.mode` represents this as one row per session, not as a separate table per mode.
 
 ---
 
@@ -200,13 +200,13 @@ Constraint tambahan: `UNIQUE (material_id, chunk_index)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| study_session_id | BIGINT | No | — | FK → `study_sessions.id`, ON DELETE CASCADE | Sesi terkait |
-| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic yang dipilih untuk sesi ini |
+| study_session_id | BIGINT | No | — | FK → `study_sessions.id`, ON DELETE CASCADE | Related session |
+| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Topic selected for this session |
 | created_at | TIMESTAMP | No | now() | — | — |
 
 Primary Key: **composite** `(study_session_id, topic_id)`.
 
-> **Design Decision:** Study Session Configuration (Product Spec §6) memungkinkan user memilih beberapa topic sekaligus ("Topics — topic/concept mana yang ingin dipelajari"). Dimodelkan sebagai pivot table (bukan kolom JSON array) agar tetap dapat di-enforce dengan foreign key dan diindeks — sesuai kebutuhan relational integrity untuk implementation reference yang konkret.
+> **Design Decision:** Study Session Configuration (Product Spec §6) allows the user to select multiple topics at once ("Topics — which topic/concept to study"). Modeled as a pivot table (not a JSON array column) so it can still be enforced with foreign keys and indexed — meeting the relational integrity requirements for a concrete implementation reference.
 
 ---
 
@@ -214,20 +214,20 @@ Primary Key: **composite** `(study_session_id, topic_id)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas quiz |
-| study_session_id | BIGINT | No | — | FK → `study_sessions.id`, ON DELETE CASCADE | Sesi yang menghasilkan quiz ini |
-| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Scope topic quiz |
-| subtopic_id | BIGINT | Yes | NULL | FK → `subtopics.id`, ON DELETE CASCADE | Scope subtopic spesifik (dipakai Review Weak Topics) |
-| difficulty | VARCHAR(10) | Yes | NULL | CHECK (difficulty IN ('easy','medium','hard')) | Difficulty quiz ini |
-| status | VARCHAR(20) | No | `'in_progress'` | CHECK (status IN ('in_progress','completed')) | Status quiz |
-| total_questions | SMALLINT | No | 0 | CHECK (total_questions >= 0) | Jumlah pertanyaan |
-| correct_count | SMALLINT | Yes | NULL | CHECK (correct_count >= 0) | Jumlah jawaban benar (setelah completed) |
-| score | NUMERIC(5,2) | Yes | NULL | CHECK (score BETWEEN 0 AND 100) | Skor akhir quiz (%) |
-| completed_at | TIMESTAMP | Yes | NULL | — | Waktu quiz diselesaikan |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Quiz identity |
+| study_session_id | BIGINT | No | — | FK → `study_sessions.id`, ON DELETE CASCADE | Session that produced this quiz |
+| topic_id | BIGINT | No | — | FK → `topics.id`, ON DELETE CASCADE | Quiz topic scope |
+| subtopic_id | BIGINT | Yes | NULL | FK → `subtopics.id`, ON DELETE CASCADE | Specific subtopic scope (used by Review Weak Topics) |
+| difficulty | VARCHAR(10) | Yes | NULL | CHECK (difficulty IN ('easy','medium','hard')) | Difficulty of this quiz |
+| status | VARCHAR(20) | No | `'in_progress'` | CHECK (status IN ('in_progress','completed')) | Quiz status |
+| total_questions | SMALLINT | No | 0 | CHECK (total_questions >= 0) | Number of questions |
+| correct_count | SMALLINT | Yes | NULL | CHECK (correct_count >= 0) | Number of correct answers (after completed) |
+| score | NUMERIC(5,2) | Yes | NULL | CHECK (score BETWEEN 0 AND 100) | Final quiz score (%) |
+| completed_at | TIMESTAMP | Yes | NULL | — | Time the quiz was completed |
 | created_at | TIMESTAMP | No | now() | — | — |
 | updated_at | TIMESTAMP | No | now() | — | — |
 
-> **Design Decision:** Review Weak Topics (Product Spec §7.2: "AI memberikan mini-question atau re-test") **menggunakan struktur `quizzes` yang sama** dengan Quiz Me — bedanya hanya `study_sessions.mode = 'review_weak_topics'` dan `quizzes.subtopic_id` diisi untuk mempersempit scope ke satu subtopic yang lemah. Ini menghindari duplikasi tabel "review attempt" yang secara struktural identik dengan quiz biasa (pertanyaan → jawaban → evaluasi → update mastery).
+> **Design Decision:** Review Weak Topics (Product Spec §7.2: "The AI gives a mini-question or re-test") **uses the same `quizzes` structure** as Quiz Me — the only difference is `study_sessions.mode = 'review_weak_topics'` and `quizzes.subtopic_id` being populated to narrow the scope to a single weak subtopic. This avoids duplicating a "review attempt" table that is structurally identical to a regular quiz (question → answer → evaluation → mastery update).
 
 ---
 
@@ -235,17 +235,17 @@ Primary Key: **composite** `(study_session_id, topic_id)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas pertanyaan |
-| quiz_id | BIGINT | No | — | FK → `quizzes.id`, ON DELETE CASCADE | Quiz pemilik pertanyaan |
-| subtopic_id | BIGINT | No | — | FK → `subtopics.id`, ON DELETE CASCADE | Subtopic target evaluasi (untuk update mastery) |
-| question_type | VARCHAR(20) | No | — | CHECK (question_type IN ('multiple_choice','true_false','short_answer')) | Tipe pertanyaan (Product Spec §7.1) |
-| question_text | TEXT | No | — | — | Teks pertanyaan |
-| options | JSONB | Yes | NULL | — | Array opsi jawaban (untuk `multiple_choice`) |
-| correct_answer | TEXT | No | — | — | Jawaban benar / referensi kunci jawaban |
-| order_index | SMALLINT | No | 0 | — | Urutan pertanyaan dalam quiz |
-| created_at | TIMESTAMP | No | now() | — | Immutable setelah dibuat, tidak ada `updated_at` |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Question identity |
+| quiz_id | BIGINT | No | — | FK → `quizzes.id`, ON DELETE CASCADE | Quiz owning the question |
+| subtopic_id | BIGINT | No | — | FK → `subtopics.id`, ON DELETE CASCADE | Target subtopic for evaluation (for mastery updates) |
+| question_type | VARCHAR(20) | No | — | CHECK (question_type IN ('multiple_choice','true_false','short_answer')) | Question type (Product Spec §7.1) |
+| question_text | TEXT | No | — | — | Question text |
+| options | JSONB | Yes | NULL | — | Answer options array (for `multiple_choice`) |
+| correct_answer | TEXT | No | — | — | Correct answer / answer key reference |
+| order_index | SMALLINT | No | 0 | — | Question order within the quiz |
+| created_at | TIMESTAMP | No | now() | — | Immutable after creation; no `updated_at` |
 
-> **Design Decision:** `subtopic_id` di level pertanyaan (bukan hanya di level quiz) diperlukan karena satu quiz bisa mencakup beberapa subtopic di bawah satu topic (mis. quiz untuk topic "Inheritance" bisa berisi pertanyaan dari beberapa subtopic-nya), sementara Learning State Engine perlu tahu **subtopic mana** yang harus diperbarui mastery-nya per pertanyaan — sesuai Architecture §6: AI mengembalikan "this maps to Subtopic X".
+> **Design Decision:** `subtopic_id` at the question level (not just at the quiz level) is required because one quiz can span multiple subtopics under one topic (e.g., a quiz for the topic "Inheritance" can contain questions from several of its subtopics), while the Learning State Engine needs to know **which subtopic** must have its mastery updated per question — consistent with Architecture §6: the AI returns "this maps to Subtopic X".
 
 ---
 
@@ -253,14 +253,14 @@ Primary Key: **composite** `(study_session_id, topic_id)`.
 
 | Column | PostgreSQL Type | Nullable | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| id | BIGSERIAL | No | auto | PRIMARY KEY | Identitas jawaban |
-| quiz_question_id | BIGINT | No | — | FK → `quiz_questions.id`, ON DELETE CASCADE, UNIQUE | Pertanyaan yang dijawab (1 jawaban per pertanyaan) |
-| submitted_answer | TEXT | No | — | — | Jawaban yang dikirim user |
-| is_correct | BOOLEAN | No | — | — | Hasil evaluasi (AI verdict, divalidasi Laravel) |
-| ai_feedback | TEXT | Yes | NULL | — | Feedback dari AI evaluation |
-| answered_at | TIMESTAMP | No | now() | — | Waktu jawaban dikirim |
+| id | BIGSERIAL | No | auto | PRIMARY KEY | Answer identity |
+| quiz_question_id | BIGINT | No | — | FK → `quiz_questions.id`, ON DELETE CASCADE, UNIQUE | Question answered (1 answer per question) |
+| submitted_answer | TEXT | No | — | — | Answer submitted by the user |
+| is_correct | BOOLEAN | No | — | — | Evaluation result (AI verdict, validated by Laravel) |
+| ai_feedback | TEXT | Yes | NULL | — | Feedback from AI evaluation |
+| answered_at | TIMESTAMP | No | now() | — | Time the answer was submitted |
 
-> **Design Decision:** `UNIQUE (quiz_question_id)` menegakkan relasi 1:1 antara pertanyaan dan jawaban — setiap percobaan quiz baru ("Try Quiz Again") menghasilkan baris `quiz_questions` baru (bukan menimpa jawaban lama), sehingga tabel ini sekaligus berfungsi sebagai **historical log** dari seluruh attempt yang pernah dilakukan user, tanpa perlu tabel log tambahan (lihat §2).
+> **Design Decision:** `UNIQUE (quiz_question_id)` enforces a 1:1 relationship between a question and an answer — each new quiz attempt ("Try Quiz Again") produces a new `quiz_questions` row (rather than overwriting the old answer), so this table also serves as the **historical log** of every attempt the user has made, without needing an additional log table (see §2).
 
 ---
 
@@ -268,37 +268,37 @@ Primary Key: **composite** `(study_session_id, topic_id)`.
 
 | Parent | Child | Cardinality | FK | Explanation |
 |---|---|---|---|---|
-| `users` | `materials` | 1 : N | `materials.user_id` | Satu user memiliki banyak material. |
-| `materials` | `topics` | 1 : N | `topics.material_id` | Satu material memiliki banyak topic hasil AI extraction. |
-| `topics` | `subtopics` | 1 : N | `subtopics.topic_id` | Satu topic memiliki banyak subtopic. |
-| `materials` | `chunks` | 1 : N | `chunks.material_id` | Satu material dipecah menjadi banyak chunk. |
-| `topics` | `chunks` | 1 : N | `chunks.topic_id` | Chunk ditandai dengan topic hasil identifikasi AI. |
-| `subtopics` | `chunks` | 1 : N (optional) | `chunks.subtopic_id` | Chunk dapat ditandai lebih spesifik ke subtopic. |
-| `users` | `study_sessions` | 1 : N | `study_sessions.user_id` | Satu user memulai banyak study session. |
-| `materials` | `study_sessions` | 1 : N | `study_sessions.material_id` | Satu material dapat dipelajari dalam banyak sesi berbeda. |
-| `study_sessions` | `study_session_topics` | 1 : N | `study_session_topics.study_session_id` | Satu sesi memilih banyak topic. |
-| `topics` | `study_session_topics` | 1 : N | `study_session_topics.topic_id` | Satu topic dapat dipilih di banyak sesi. |
-| `study_sessions` | `quizzes` | 1 : N | `quizzes.study_session_id` | Satu sesi dapat menghasilkan lebih dari satu quiz (mis. "Try Quiz Again"). |
-| `topics` | `quizzes` | 1 : N | `quizzes.topic_id` | Quiz selalu berada dalam scope satu topic. |
-| `subtopics` | `quizzes` | 1 : N (optional) | `quizzes.subtopic_id` | Quiz review dapat dipersempit ke satu subtopic. |
-| `quizzes` | `quiz_questions` | 1 : N | `quiz_questions.quiz_id` | Satu quiz memiliki banyak pertanyaan. |
-| `subtopics` | `quiz_questions` | 1 : N | `quiz_questions.subtopic_id` | Setiap pertanyaan menargetkan satu subtopic untuk update mastery. |
-| `quiz_questions` | `quiz_answers` | 1 : 1 | `quiz_answers.quiz_question_id` (UNIQUE) | Satu pertanyaan dijawab tepat satu kali per attempt quiz. |
+| `users` | `materials` | 1 : N | `materials.user_id` | One user owns many materials. |
+| `materials` | `topics` | 1 : N | `topics.material_id` | One material has many topics from AI extraction. |
+| `topics` | `subtopics` | 1 : N | `subtopics.topic_id` | One topic has many subtopics. |
+| `materials` | `chunks` | 1 : N | `chunks.material_id` | One material is split into many chunks. |
+| `topics` | `chunks` | 1 : N | `chunks.topic_id` | Chunks are tagged with the topic from AI identification. |
+| `subtopics` | `chunks` | 1 : N (optional) | `chunks.subtopic_id` | Chunks can be tagged more specifically to a subtopic. |
+| `users` | `study_sessions` | 1 : N | `study_sessions.user_id` | One user starts many study sessions. |
+| `materials` | `study_sessions` | 1 : N | `study_sessions.material_id` | One material can be studied across many different sessions. |
+| `study_sessions` | `study_session_topics` | 1 : N | `study_session_topics.study_session_id` | One session selects many topics. |
+| `topics` | `study_session_topics` | 1 : N | `study_session_topics.topic_id` | One topic can be selected in many sessions. |
+| `study_sessions` | `quizzes` | 1 : N | `quizzes.study_session_id` | One session can produce more than one quiz (e.g., "Try Quiz Again"). |
+| `topics` | `quizzes` | 1 : N | `quizzes.topic_id` | A quiz is always scoped to one topic. |
+| `subtopics` | `quizzes` | 1 : N (optional) | `quizzes.subtopic_id` | A review quiz can be narrowed to one subtopic. |
+| `quizzes` | `quiz_questions` | 1 : N | `quiz_questions.quiz_id` | One quiz has many questions. |
+| `subtopics` | `quiz_questions` | 1 : N | `quiz_questions.subtopic_id` | Each question targets one subtopic for mastery updates. |
+| `quiz_questions` | `quiz_answers` | 1 : 1 | `quiz_answers.quiz_question_id` (UNIQUE) | One question is answered exactly once per quiz attempt. |
 
 ---
 
 ## 6. Indexing Strategy
 
-Index difokuskan pada dua kebutuhan utama: **ownership scoping** (query "punya user ini") dan **retrieval filter** (Architecture §8: `Material + Topic/Subtopic → PostgreSQL Filter → Relevant Chunks`).
+Indexes focus on two main needs: **ownership scoping** (queries for "belongs to this user") and **retrieval filtering** (Architecture §8: `Material + Topic/Subtopic → PostgreSQL Filter → Relevant Chunks`).
 
 ```sql
--- Retrieval query utama yang harus didukung index:
+-- Main retrieval query the indexes must support:
 -- SELECT * FROM chunks WHERE material_id = ? AND topic_id = ?;
 -- SELECT * FROM chunks WHERE material_id = ? AND subtopic_id = ?;
 
 CREATE INDEX idx_chunks_material_topic    ON chunks (material_id, topic_id);
 CREATE INDEX idx_chunks_material_subtopic ON chunks (material_id, subtopic_id);
--- unique(material_id, chunk_index) sudah otomatis membuat index tambahan untuk ordering
+-- unique(material_id, chunk_index) automatically provides an additional index for ordering
 
 CREATE INDEX idx_materials_user           ON materials (user_id);
 CREATE INDEX idx_materials_user_status    ON materials (user_id, status);
@@ -312,10 +312,10 @@ CREATE INDEX idx_study_sessions_user_material ON study_sessions (user_id, materi
 CREATE INDEX idx_quizzes_session          ON quizzes (study_session_id);
 CREATE INDEX idx_quiz_questions_quiz      ON quiz_questions (quiz_id);
 CREATE INDEX idx_quiz_questions_subtopic  ON quiz_questions (subtopic_id);
--- unique(quiz_question_id) pada quiz_answers sudah otomatis terindeks
+-- unique(quiz_question_id) on quiz_answers is automatically indexed
 ```
 
-Tidak ada index tambahan di luar daftar ini — sesuai instruksi untuk tidak membuat index secara berlebihan. Full-text index (`tsvector`) disebut Tech Stack §10 sebagai *SHOULD LEARN/opsional*, bukan kebutuhan MVP, sehingga tidak dimasukkan sebagai baseline.
+There are no additional indexes beyond this list — consistent with the instruction not to over-index. A full-text index (`tsvector`) is mentioned in Tech Stack §10 as *SHOULD LEARN/optional*, not an MVP requirement, so it is not included in the baseline.
 
 ---
 
@@ -323,36 +323,36 @@ Tidak ada index tambahan di luar daftar ini — sesuai instruksi untuk tidak mem
 
 | Entity.Column | Values | Meaning |
 |---|---|---|
-| `materials.status` | `processing`, `ready`, `failed` | Status pipeline Material Processing (Product Spec §3, Architecture §7 & §13). |
-| `subtopics.status` | `not_started`, `in_progress`, `needs_review`, `mastered` | Learning status per subtopic; dipetakan ke simbol sidebar `○ ◐ ⚠ ✓` (Product Spec §7.4). |
-| `study_sessions.mode` | `teach_me`, `quiz_me`, `review_weak_topics`, `guided_study_session` | Learning Mode aktif dalam Studyback Workspace (Product Spec §7.2). |
-| `study_sessions.difficulty` | `easy`, `medium`, `hard` | Difficulty konfigurasi sesi (Product Spec §6). |
-| `study_sessions.status` | `active`, `completed` | Lifecycle sesi. |
-| `quizzes.status` | `in_progress`, `completed` | Lifecycle quiz. |
-| `quizzes.difficulty` | `easy`, `medium`, `hard` | Diwariskan dari konfigurasi sesi. |
-| `quiz_questions.question_type` | `multiple_choice`, `true_false`, `short_answer` | Tipe pertanyaan (Product Spec §7.1, Quiz — struktured interface). |
+| `materials.status` | `processing`, `ready`, `failed` | Material Processing pipeline status (Product Spec §3, Architecture §7 & §13). |
+| `subtopics.status` | `not_started`, `in_progress`, `needs_review`, `mastered` | Learning status per subtopic; mapped to sidebar symbols `○ ◐ ⚠ ✓` (Product Spec §7.4). |
+| `study_sessions.mode` | `teach_me`, `quiz_me`, `review_weak_topics`, `guided_study_session` | Active Learning Mode in the Studyback Workspace (Product Spec §7.2). |
+| `study_sessions.difficulty` | `easy`, `medium`, `hard` | Session configuration difficulty (Product Spec §6). |
+| `study_sessions.status` | `active`, `completed` | Session lifecycle. |
+| `quizzes.status` | `in_progress`, `completed` | Quiz lifecycle. |
+| `quizzes.difficulty` | `easy`, `medium`, `hard` | Inherited from the session configuration. |
+| `quiz_questions.question_type` | `multiple_choice`, `true_false`, `short_answer` | Question type (Product Spec §7.1, Quiz — structured interface). |
 
-Mapping status → threshold mastery (Product Spec §8.2, fixed & deterministic):
+Status → mastery threshold mapping (Product Spec §8.2, fixed & deterministic):
 
-| Skor | Status |
+| Score | Status |
 |---|---|
 | < 60% | `needs_review` |
 | 60% – 79% | `in_progress` |
 | ≥ 80% | `mastered` |
 
-`not_started` khusus untuk subtopic yang belum pernah memiliki `quiz_answers` sama sekali (belum pernah diuji).
+`not_started` is specifically for subtopics that have never had any `quiz_answers` at all (never tested).
 
 ---
 
 ## 8. Learning State Model
 
-**Current state** disimpan langsung sebagai kolom pada `subtopics`: `mastery_score` (NUMERIC 0–100) dan `status` (enum). Kolom ini adalah satu-satunya sumber kebenaran yang dibaca oleh sidebar Learning Map, Material Detail ("Overall mastery"), dan Review Weak Topics.
+**Current state** is stored directly as columns on `subtopics`: `mastery_score` (NUMERIC 0–100) and `status` (enum). These columns are the single source of truth read by the sidebar Learning Map, Material Detail ("Overall mastery"), and Review Weak Topics.
 
-**History of attempts** tidak memerlukan tabel terpisah — seluruh jawaban historis tersedia di `quiz_answers` (join `quiz_questions.subtopic_id`), yang bersifat immutable (tidak pernah di-update, hanya di-insert).
+**History of attempts** needs no separate table — all historical answers are available in `quiz_answers` (joined via `quiz_questions.subtopic_id`), which is immutable (never updated, only inserted).
 
-**Formula update mastery (Design Decision, deterministic sesuai Product Spec §8.2):**
+**Mastery update formula (Design Decision, deterministic per Product Spec §8.2):**
 
-Setiap kali sebuah quiz diselesaikan (`quizzes.status → 'completed'`), untuk setiap `subtopic_id` unik yang muncul di antara `quiz_questions` pada quiz tersebut, Learning State Engine (Laravel) menghitung ulang:
+Whenever a quiz is completed (`quizzes.status → 'completed'`), for every unique `subtopic_id` appearing among the `quiz_questions` of that quiz, the Learning State Engine (Laravel) recalculates:
 
 ```sql
 mastery_score = (
@@ -363,23 +363,23 @@ mastery_score = (
 );
 ```
 
-yaitu **rata-rata kumulatif seluruh jawaban yang pernah diberikan** untuk subtopic tersebut (di seluruh quiz/attempt), lalu `status` ditentukan dari threshold di §7. Nilai hasil perhitungan ditulis kembali ke `subtopics.mastery_score` dan `subtopics.status` (`updated_at` otomatis terisi ulang).
+that is, the **cumulative average of every answer ever given** for that subtopic (across all quizzes/attempts), and then `status` is determined from the thresholds in §7. The calculated value is written back to `subtopics.mastery_score` and `subtopics.status` (`updated_at` is automatically refreshed).
 
-**Overall mastery per material** (Product Spec §5, "Overall mastery") **tidak disimpan sebagai kolom** — dihitung on-the-fly sebagai `AVG(subtopics.mastery_score)` untuk seluruh subtopic milik material tersebut, agar tidak ada risiko nilai agregat menjadi stale terhadap sumber aslinya.
+**Overall mastery per material** (Product Spec §5, "Overall mastery") is **not stored as a column** — it is calculated on the fly as `AVG(subtopics.mastery_score)` over all subtopics belonging to that material, so there is no risk of the aggregate value becoming stale relative to its source.
 
-**AI tidak pernah menjadi pemilik Learning State:** `ai_service` hanya mengembalikan verdict per jawaban (`is_correct`, `ai_feedback`) yang kemudian **divalidasi dan ditulis oleh Laravel** ke `quiz_answers`; perhitungan `mastery_score`/`status` sepenuhnya dilakukan oleh Laravel (Learning State Engine), bukan oleh LLM — sesuai Architecture §6 & §9.
+**AI is never the owner of the Learning State:** `ai_service` only returns a verdict per answer (`is_correct`, `ai_feedback`), which is then **validated and written by Laravel** into `quiz_answers`; the `mastery_score`/`status` calculation is done entirely by Laravel (Learning State Engine), not by the LLM — consistent with Architecture §6 & §9.
 
 ---
 
 ## 9. Quiz & Study Session Model
 
-- **Study Session** (`study_sessions`) dibuat saat user menekan *Start Learning* atau *Start Study Session*, menyimpan `mode`, `difficulty`, dan topic yang dipilih (`study_session_topics`).
-- **Quiz** (`quizzes`) dibuat oleh Quiz Module setiap kali AI Orchestrator menghasilkan quiz baru (dipicu dari Quiz Me, Guided Study Session tahap Test, atau Review Weak Topics re-test) — selalu terhubung ke `study_session_id` yang sedang berjalan.
-- **Questions** (`quiz_questions`) di-generate oleh AI (structured JSON), divalidasi bentuknya oleh Laravel sebelum di-insert (Architecture §13: validasi shape, retry-once bila invalid).
-- **Answers/Attempts** (`quiz_answers`) di-insert satu per pertanyaan setelah user submit, hasil evaluasi AI (`is_correct`, `ai_feedback`) disimpan sebagai referensi tetapi **skor final dihitung ulang oleh Laravel** (bukan sekadar disalin dari AI), sesuai Architecture §5: "scores answers deterministically (using AI evaluation output as input, not as final authority on state)".
-- **Score/Evaluation**: setelah seluruh `quiz_questions` terjawab, Laravel menghitung `quizzes.correct_count`, `quizzes.score = correct_count / total_questions * 100`, set `quizzes.status = 'completed'` dan `completed_at`, lalu memicu update `subtopics.mastery_score`/`status` (§8) dalam satu transaction (§15).
+- **Study Session** (`study_sessions`) is created when the user presses *Start Learning* or *Start Study Session*, storing the `mode`, `difficulty`, and selected topics (`study_session_topics`).
+- **Quiz** (`quizzes`) is created by the Quiz Module every time the AI Orchestrator produces a new quiz (triggered from Quiz Me, the Test stage of Guided Study Session, or a Review Weak Topics re-test) — always linked to the running `study_session_id`.
+- **Questions** (`quiz_questions`) are generated by the AI (structured JSON), and their shape is validated by Laravel before insert (Architecture §13: validate shape, retry-once if invalid).
+- **Answers/Attempts** (`quiz_answers`) are inserted one per question after the user submits; the AI evaluation result (`is_correct`, `ai_feedback`) is stored as a reference, but **the final score is recalculated by Laravel** (not merely copied from the AI), consistent with Architecture §5: "scores answers deterministically (using AI evaluation output as input, not as final authority on state)".
+- **Score/Evaluation**: once all `quiz_questions` are answered, Laravel calculates `quizzes.correct_count`, `quizzes.score = correct_count / total_questions * 100`, sets `quizzes.status = 'completed'` and `completed_at`, then triggers the update of `subtopics.mastery_score`/`status` (§8) within a single transaction (§15).
 
-Hanya data yang benar-benar diperlukan yang dipersist — tidak ada penyimpanan percakapan bebas (free-form chat) dari Teach Me, karena hanya empat area structured output yang didukung (Product Spec §9.1): topic extraction, quiz generation, answer evaluation, dan output terkait learning state.
+Only the data that is truly needed is persisted — no storage of free-form conversation (chat) from Teach Me, because only the four structured output areas are supported (Product Spec §9.1): topic extraction, quiz generation, answer evaluation, and learning state-related output.
 
 ---
 
@@ -392,55 +392,55 @@ PDF
  ↓ (File Storage)                         materials.file_path, materials.status = 'processing'
 Text Extraction (spatie/pdf-to-text)
  ↓
-Cleaning (PHP native, tidak dipersist)
+Cleaning (PHP native, not persisted)
  ↓
-Fixed-Length Chunking (~1.000 char, ~200 char overlap)
- ↓ (di memory, belum di-insert)
+Fixed-Length Chunking (~1,000 char, ~200 char overlap)
+ ↓ (in memory, not yet inserted)
 Topic/Subtopic Identification (ai_service → Featherless, structured JSON)
  ↓
-PostgreSQL — dalam SATU transaction:
+PostgreSQL — within ONE transaction:
    INSERT topics
    INSERT subtopics
-   INSERT chunks (dengan topic_id/subtopic_id hasil AI)
+   INSERT chunks (with topic_id/subtopic_id from AI)
    UPDATE materials SET status = 'ready'
 ```
 
-Jika pipeline gagal di titik manapun (extraction gagal, AI gagal setelah retry-once, validasi structured output gagal), transaction di atas di-rollback sepenuhnya dan `materials.status` di-set `'failed'` dengan `failed_reason` terisi di luar transaction utama (update tunggal), sehingga tidak pernah ada material dengan `topics`/`subtopics`/`chunks` sebagian (partial) — sesuai Architecture §13.
+If the pipeline fails at any point (extraction fails, AI fails after retry-once, structured output validation fails), the transaction above is fully rolled back and `materials.status` is set to `'failed'` with `failed_reason` populated outside the main transaction (a single update), so there is never a material with partial `topics`/`subtopics`/`chunks` — consistent with Architecture §13.
 
 ---
 
 ## 11. File Storage Metadata
 
-PDF binary **tidak** disimpan di PostgreSQL — hanya metadata-nya, sesuai Tech Stack §5 (Laravel Filesystem, disk `local`, `storage/app/private`):
+PDF binaries are **not** stored in PostgreSQL — only their metadata, per Tech Stack §5 (Laravel Filesystem, `local` disk, `storage/app/private`):
 
-| Column (di `materials`) | Purpose |
+| Column (in `materials`) | Purpose |
 |---|---|
-| `original_filename` | Nama file yang ditampilkan ke user saat Download Material. |
-| `file_path` | Nama/path file internal di disk `local` (tidak mudah ditebak, tidak diekspos ke client). |
-| `file_size_bytes` | Validasi ukuran upload & tampilan info file. |
+| `original_filename` | Filename shown to the user during Download Material. |
+| `file_path` | Internal file name/path on the `local` disk (hard to guess, not exposed to the client). |
+| `file_size_bytes` | Upload size validation & file info display. |
 
-Download Material selalu melalui backend-proxied route (`Storage::download()`) setelah ownership check (`materials.user_id === auth()->id()`) — tidak ada URL publik langsung ke file.
+Download Material always goes through a backend-proxied route (`Storage::download()`) after an ownership check (`materials.user_id === auth()->id()`) — there is no direct public URL to the file.
 
 ---
 
 ## 12. Retrieval Design
 
-Implementasi flow (Architecture §8, Tech Stack §6):
+Flow implementation (Architecture §8, Tech Stack §6):
 
 ```text
-Study Session (material_id, topic_id/subtopic_id terpilih)
+Study Session (material_id, selected topic_id/subtopic_id)
         ↓
 SELECT content FROM chunks
 WHERE material_id = :material_id
   AND (topic_id = :topic_id OR subtopic_id = :subtopic_id)
 ORDER BY chunk_index ASC
         ↓
-Relevant Chunks → dirangkai jadi Relevant Context
+Relevant Chunks → assembled into Relevant Context
         ↓
-ai_service membangun prompt (Retrieved Context + Task Input)
+ai_service builds the prompt (Retrieved Context + Task Input)
 ```
 
-Query ini didukung langsung oleh relationship `chunks.material_id` + `chunks.topic_id` (dan `chunks.subtopic_id` untuk scope lebih sempit) beserta composite index `idx_chunks_material_topic` / `idx_chunks_material_subtopic` (§6). Tidak ada similarity search, embedding, atau vector index — murni `WHERE` filter relational sesuai keputusan arsitektur final.
+This query is directly supported by the `chunks.material_id` + `chunks.topic_id` relationships (and `chunks.subtopic_id` for a narrower scope) along with the composite indexes `idx_chunks_material_topic` / `idx_chunks_material_subtopic` (§6). There is no similarity search, embedding, or vector index — purely a relational `WHERE` filter, consistent with the final architecture decision.
 
 ---
 
@@ -454,20 +454,20 @@ Query ini didukung langsung oleh relationship `chunks.material_id` + `chunks.top
 | `subtopics` | `Subtopic` | `belongsTo(Topic::class)`, `hasMany(Chunk::class)`, `hasMany(QuizQuestion::class)`, `hasMany(Quiz::class)` |
 | `chunks` | `Chunk` | `belongsTo(Material::class)`, `belongsTo(Topic::class)`, `belongsTo(Subtopic::class)` |
 | `study_sessions` | `StudySession` | `belongsTo(User::class)`, `belongsTo(Material::class)`, `belongsToMany(Topic::class, 'study_session_topics')`, `hasMany(Quiz::class)` |
-| `study_session_topics` | *(pivot, no model required)* | Diakses via `belongsToMany` |
+| `study_session_topics` | *(pivot, no model required)* | Accessed via `belongsToMany` |
 | `quizzes` | `Quiz` | `belongsTo(StudySession::class)`, `belongsTo(Topic::class)`, `belongsTo(Subtopic::class)`, `hasMany(QuizQuestion::class)` |
 | `quiz_questions` | `QuizQuestion` | `belongsTo(Quiz::class)`, `belongsTo(Subtopic::class)`, `hasOne(QuizAnswer::class)` |
 | `quiz_answers` | `QuizAnswer` | `belongsTo(QuizQuestion::class)` |
 
-Ownership scoping diterapkan melalui Laravel Policy pada `Material` (root entity); seluruh query ke `Topic`, `Subtopic`, `Chunk`, `StudySession`, `Quiz`, dst. dilakukan melalui relationship yang di-scope dari `Material` milik `auth()->user()`.
+Ownership scoping is applied through Laravel Policies on `Material` (the root entity); all queries to `Topic`, `Subtopic`, `Chunk`, `StudySession`, `Quiz`, etc. are performed through relationships scoped from the `Material` owned by `auth()->user()`.
 
 ---
 
 ## 14. Migration Order
 
-Urutan berdasarkan foreign-key dependency (harus dieksekusi berurutan):
+Order based on foreign-key dependencies (must be executed sequentially):
 
-1. `users` *(bawaan Laravel/Sanctum)*
+1. `users` *(default Laravel/Sanctum)*
 2. `materials` — depends on `users`
 3. `topics` — depends on `materials`
 4. `subtopics` — depends on `topics`
@@ -484,32 +484,32 @@ Urutan berdasarkan foreign-key dependency (harus dieksekusi berurutan):
 
 | Operation | Transaction Scope | Reason |
 |---|---|---|
-| **Material processing persistence** | `INSERT topics` + `INSERT subtopics` + `INSERT chunks` + `UPDATE materials.status = 'ready'` dalam satu `DB::transaction()` | Mencegah material "Ready" dengan data topic/subtopic/chunk yang tidak lengkap (Architecture §13). Kegagalan → rollback penuh, lalu `UPDATE materials.status = 'failed'` sebagai operasi terpisah. |
-| **Quiz submission** | `INSERT quiz_answers` untuk seluruh pertanyaan yang di-submit + `UPDATE quizzes` (correct_count, score, status, completed_at) dalam satu `DB::transaction()` | Menjamin hasil quiz konsisten (skor selalu sinkron dengan jawaban yang tersimpan). |
-| **Score calculation & Learning State update** | Berjalan **di dalam transaction yang sama** dengan Quiz submission: setelah `quiz_answers` di-insert dan `quizzes` diperbarui, `UPDATE subtopics.mastery_score, subtopics.status` untuk setiap subtopic yang terdampak | Architecture §13 (guiding principle): "never let an AI failure silently corrupt Learning State" — jika evaluasi AI gagal sebelum commit, seluruh transaction (termasuk mastery update) di-rollback dan state lama tetap utuh. |
+| **Material processing persistence** | `INSERT topics` + `INSERT subtopics` + `INSERT chunks` + `UPDATE materials.status = 'ready'` within one `DB::transaction()` | Prevents a "Ready" material with incomplete topic/subtopic/chunk data (Architecture §13). Failure → full rollback, then `UPDATE materials.status = 'failed'` as a separate operation. |
+| **Quiz submission** | `INSERT quiz_answers` for all submitted questions + `UPDATE quizzes` (correct_count, score, status, completed_at) within one `DB::transaction()` | Guarantees consistent quiz results (score is always in sync with the stored answers). |
+| **Score calculation & Learning State update** | Runs **within the same transaction** as the Quiz submission: after `quiz_answers` are inserted and `quizzes` is updated, `UPDATE subtopics.mastery_score, subtopics.status` for every affected subtopic | Architecture §13 (guiding principle): "never let an AI failure silently corrupt Learning State" — if the AI evaluation fails before commit, the entire transaction (including the mastery update) is rolled back and the old state remains intact. |
 
 ---
 
 ## 16. Deletion & Lifecycle Rules
 
-- **Hard delete** digunakan di seluruh schema — tidak ada `deleted_at`/soft delete, karena tidak ada requirement soft-delete/recovery di ketiga source document, dan menambahkannya hanya menambah kompleksitas yang tidak dibutuhkan untuk MVP 48 jam.
-- **`users` → `materials`**: `ON DELETE CASCADE`. Menghapus user menghapus seluruh material miliknya beserta seluruh data turunan.
-- **`materials` → `topics`, `chunks`, `study_sessions`**: `ON DELETE CASCADE`. Material adalah root entity personal; menghapusnya membersihkan seluruh struktur topic/subtopic/chunk serta sesi belajar yang terkait.
+- **Hard delete** is used throughout the schema — no `deleted_at`/soft delete, because none of the three source documents requires soft-delete/recovery, and adding it would only add complexity that is not needed for the 48-hour MVP.
+- **`users` → `materials`**: `ON DELETE CASCADE`. Deleting a user deletes all of their materials along with all derived data.
+- **`materials` → `topics`, `chunks`, `study_sessions`**: `ON DELETE CASCADE`. A material is the personal root entity; deleting it cleans up the entire topic/subtopic/chunk structure as well as related study sessions.
 - **`topics` → `subtopics`, `chunks`, `study_session_topics`, `quizzes`**: `ON DELETE CASCADE`.
-- **`subtopics` → `quiz_questions`, `quizzes` (scope)**: `ON DELETE CASCADE`. **`chunks.subtopic_id`**: `ON DELETE SET NULL` — chunk tetap berguna untuk retrieval di level topic meski tagging subtopic-nya hilang.
+- **`subtopics` → `quiz_questions`, `quizzes` (scope)**: `ON DELETE CASCADE`. **`chunks.subtopic_id`**: `ON DELETE SET NULL` — a chunk remains useful for topic-level retrieval even if its subtopic tagging is gone.
 - **`study_sessions` → `quizzes`, `study_session_topics`**: `ON DELETE CASCADE`.
 - **`quizzes` → `quiz_questions`**: `ON DELETE CASCADE`. **`quiz_questions` → `quiz_answers`**: `ON DELETE CASCADE`.
-- Tidak ada lifecycle "archive"/"expire" — sesuai MVP scope, materials dan learning state bersifat persisten selama tidak dihapus user.
+- There is no "archive"/"expire" lifecycle — consistent with the MVP scope, materials and learning state remain persistent as long as the user does not delete them.
 
 ---
 
 ## 17. Security & Ownership
 
-- Setiap `materials` memiliki `user_id` sebagai satu-satunya sumber ownership; seluruh entity turunan (`topics`, `subtopics`, `chunks`, `study_sessions`, `quizzes`, `quiz_questions`, `quiz_answers`) hanya dapat ditelusuri melalui rantai foreign key yang berakhir di `materials.user_id`.
-- Laravel Policy/Middleware memvalidasi `materials.user_id === auth()->id()` pada **setiap** request read/write terhadap material atau turunannya — tidak ada endpoint yang mengizinkan akses lintas user (Architecture §14).
-- `chunks.content` (isi materi) hanya boleh dikirim ke LLM Provider dalam scope material/topic milik user yang sedang login — tidak pernah lintas user dalam satu prompt (Architecture §14, LLM data boundary).
-- `materials.file_path` tidak pernah diekspos sebagai URL publik; akses hanya melalui route backend terautentikasi dengan ownership check (§11).
-- Tidak ada mekanisme sharing/public material di schema ini — seluruh data material bersifat privat per user, sesuai MVP scope.
+- Every `materials` row has a `user_id` as the single source of ownership; all derived entities (`topics`, `subtopics`, `chunks`, `study_sessions`, `quizzes`, `quiz_questions`, `quiz_answers`) can only be traced through the foreign key chain that ends at `materials.user_id`.
+- Laravel Policies/Middleware validate `materials.user_id === auth()->id()` on **every** read/write request to a material or its descendants — no endpoint allows cross-user access (Architecture §14).
+- `chunks.content` (material content) may only be sent to the LLM Provider within the scope of the logged-in user's own material/topic — never cross-user within a single prompt (Architecture §14, LLM data boundary).
+- `materials.file_path` is never exposed as a public URL; access is only through an authenticated backend route with an ownership check (§11).
+- There is no sharing/public material mechanism in this schema — all material data is private per user, consistent with the MVP scope.
 
 ---
 
@@ -606,28 +606,28 @@ erDiagram
 
 | Table | Purpose | Primary Key | Important Foreign Keys |
 |---|---|---|---|
-| `users` | Identitas & autentikasi | `id` | — |
-| `materials` | Metadata material upload & status processing | `id` | `user_id → users.id` |
-| `topics` | Konsep tingkat atas dalam material | `id` | `material_id → materials.id` |
-| `subtopics` | Unit mastery/status granular | `id` | `topic_id → topics.id` |
-| `chunks` | Potongan teks untuk retrieval | `id` | `material_id → materials.id`, `topic_id → topics.id`, `subtopic_id → subtopics.id` |
-| `study_sessions` | Sesi belajar (mode, difficulty) | `id` | `user_id → users.id`, `material_id → materials.id` |
-| `study_session_topics` | Topic terpilih per sesi | `(study_session_id, topic_id)` | `study_session_id → study_sessions.id`, `topic_id → topics.id` |
-| `quizzes` | Instance quiz & hasil agregat | `id` | `study_session_id → study_sessions.id`, `topic_id → topics.id`, `subtopic_id → subtopics.id` |
-| `quiz_questions` | Pertanyaan quiz individual | `id` | `quiz_id → quizzes.id`, `subtopic_id → subtopics.id` |
-| `quiz_answers` | Jawaban user & hasil evaluasi | `id` | `quiz_question_id → quiz_questions.id` (UNIQUE) |
+| `users` | Identity & authentication | `id` | — |
+| `materials` | Uploaded material metadata & processing status | `id` | `user_id → users.id` |
+| `topics` | Top-level concepts within a material | `id` | `material_id → materials.id` |
+| `subtopics` | Granular mastery/status units | `id` | `topic_id → topics.id` |
+| `chunks` | Text segments for retrieval | `id` | `material_id → materials.id`, `topic_id → topics.id`, `subtopic_id → subtopics.id` |
+| `study_sessions` | Study sessions (mode, difficulty) | `id` | `user_id → users.id`, `material_id → materials.id` |
+| `study_session_topics` | Topics selected per session | `(study_session_id, topic_id)` | `study_session_id → study_sessions.id`, `topic_id → topics.id` |
+| `quizzes` | Quiz instance & aggregate result | `id` | `study_session_id → study_sessions.id`, `topic_id → topics.id`, `subtopic_id → subtopics.id` |
+| `quiz_questions` | Individual quiz questions | `id` | `quiz_id → quizzes.id`, `subtopic_id → subtopics.id` |
+| `quiz_answers` | User answers & evaluation results | `id` | `quiz_question_id → quiz_questions.id` (UNIQUE) |
 
 ---
 
 ## 20. Implementation Checklist
 
-- [ ] **Migrations** dibuat sesuai urutan §14, satu file migration per tabel, menggunakan tipe kolom PostgreSQL di §4.
-- [ ] **Models** dibuat sesuai §13 (`User`, `Material`, `Topic`, `Subtopic`, `Chunk`, `StudySession`, `Quiz`, `QuizQuestion`, `QuizAnswer`); `study_session_topics` cukup sebagai pivot table tanpa model.
-- [ ] **Relationships** Eloquent (`belongsTo`, `hasMany`, `belongsToMany`) diimplementasikan persis sesuai §5 dan §13.
-- [ ] **Foreign keys** dan `ON DELETE` behavior diterapkan persis sesuai §16 (`CASCADE` untuk seluruh child kecuali `chunks.subtopic_id` → `SET NULL`).
-- [ ] **Indexes** dibuat persis sesuai daftar di §6 — tidak menambah index lain di luar daftar.
-- [ ] **Constraints**: seluruh `CHECK` constraint enum (§7) dan constraint numerik (`mastery_score`, `score` 0–100; `file_size_bytes > 0`) diterapkan di level migration, bukan hanya validasi aplikasi.
-- [ ] **Seeders**: seeder minimal untuk satu user demo + satu material contoh dengan topics/subtopics/chunks (untuk keperluan demo rehearsal, Architecture §16 Phase 7) — opsional, tidak wajib untuk schema itu sendiri.
-- [ ] **Transactions**: `DB::transaction()` diterapkan pada Material Processing persistence dan Quiz submission + Learning State update sesuai §15.
-- [ ] **Ownership scoping**: Policy/middleware memvalidasi `materials.user_id` pada setiap endpoint yang menyentuh material atau turunannya, sesuai §17.
-- [ ] **Retrieval support**: query filter chunk (`material_id` + `topic_id`/`subtopic_id`, `ORDER BY chunk_index`) diimplementasikan di Retrieval module sesuai §12, menggunakan index yang sudah didefinisikan di §6.
+- [ ] **Migrations** created in the §14 order, one migration file per table, using the PostgreSQL column types in §4.
+- [ ] **Models** created per §13 (`User`, `Material`, `Topic`, `Subtopic`, `Chunk`, `StudySession`, `Quiz`, `QuizQuestion`, `QuizAnswer`); `study_session_topics` is sufficient as a pivot table without a model.
+- [ ] **Eloquent relationships** (`belongsTo`, `hasMany`, `belongsToMany`) implemented exactly per §5 and §13.
+- [ ] **Foreign keys** and `ON DELETE` behavior applied exactly per §16 (`CASCADE` for all children except `chunks.subtopic_id` → `SET NULL`).
+- [ ] **Indexes** created exactly per the list in §6 — no indexes beyond that list.
+- [ ] **Constraints**: all `CHECK` enum constraints (§7) and numeric constraints (`mastery_score`, `score` 0–100; `file_size_bytes > 0`) enforced at the migration level, not just application validation.
+- [ ] **Seeders**: a minimal seeder for one demo user + one sample material with topics/subtopics/chunks (for demo rehearsal purposes, Architecture §16 Phase 7) — optional, not required for the schema itself.
+- [ ] **Transactions**: `DB::transaction()` applied to Material Processing persistence and to Quiz submission + Learning State update per §15.
+- [ ] **Ownership scoping**: Policies/middleware validate `materials.user_id` on every endpoint that touches a material or its descendants, per §17.
+- [ ] **Retrieval support**: the chunk filter query (`material_id` + `topic_id`/`subtopic_id`, `ORDER BY chunk_index`) implemented in the Retrieval module per §12, using the indexes defined in §6.
