@@ -4,6 +4,7 @@ import { useAppStore } from '../store/appStore';
 import { materialService, studySessionService, quizService } from '../services/api';
 import { Card, Button, Badge } from '../components/Shared';
 import MarkdownContent from '../components/MarkdownContent';
+import { formatPercentage } from '../utils/format';
 import { 
   BookOpen, 
   HelpCircle, 
@@ -321,7 +322,7 @@ export default function Workspace() {
                   />
                 </svg>
                 <span className="absolute font-mono text-[10px] font-bold text-slate-800">
-                  {topicsData.overall_mastery}%
+                  {formatPercentage(topicsData.overall_mastery)}%
                 </span>
               </div>
             )}

@@ -2,6 +2,7 @@ import React from 'react';
 import { Loader2, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { formatPercentage } from '../utils/format';
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
@@ -190,7 +191,7 @@ export const ProgressRing = ({ value, size = 64, strokeWidth = 6, className }) =
         />
       </svg>
       <span className="absolute font-mono text-xs font-bold text-slate-800">
-        {percent}%
+        {formatPercentage(percent)}%
       </span>
     </div>
   );

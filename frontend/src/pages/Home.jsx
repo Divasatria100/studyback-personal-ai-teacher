@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { materialService } from '../services/api';
 import { Card, Button, ProgressBar, Badge } from '../components/Shared';
+import { formatPercentage } from '../utils/format';
 import { Upload, FileText, ChevronRight, User, BookOpen, GraduationCap, Award } from 'lucide-react';
 
 export default function Home() {
@@ -271,7 +272,7 @@ export default function Home() {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-mono text-[9px] text-slate-500 uppercase tracking-wider">Mastery</span>
-                      <span className="font-mono text-xs font-bold text-slate-900">{mat.overall_mastery}%</span>
+                      <span className="font-mono text-xs font-bold text-slate-900">{formatPercentage(mat.overall_mastery)}%</span>
                     </div>
                   </div>
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { materialService, studySessionService } from '../services/api';
 import { Card, Button, Badge, ProgressBar, Modal } from '../components/Shared';
+import { formatPercentage } from '../utils/format';
 import { Download, Play, BookOpen, Calendar, Award, FileText, ChevronRight, Check, Trash2 } from 'lucide-react';
 
 export default function MaterialDetail() {
@@ -246,7 +247,7 @@ export default function MaterialDetail() {
                 />
               </svg>
               <span className="absolute font-mono text-xl font-bold text-slate-900">
-                {material.overall_mastery}%
+                {formatPercentage(material.overall_mastery)}%
               </span>
             </div>
           </div>
@@ -254,7 +255,7 @@ export default function MaterialDetail() {
           <p className="text-sm text-slate-650 font-body">
             {material.overall_mastery === 0 
               ? "You haven't started studying this material yet. Hit start session to begin!" 
-              : `You have mastered ${material.overall_mastery}% of the content. Keep reviewing to hit 100%!`}
+              : `You have mastered ${formatPercentage(material.overall_mastery)}% of the content. Keep reviewing to hit 100%!`}
           </p>
 
           <div className="border-t border-slate-900/10 pt-4 flex flex-col gap-2 text-left text-xs font-mono text-slate-600">
