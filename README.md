@@ -6,6 +6,8 @@ Studyback is an AI-powered learning platform that transforms the PDFs, lecture n
 
 ---
 
+[Watch the Studyback Demo](https://youtu.be/6VwkiUaHL9I?si=7uB4bDE_rDPMF5Sd)
+
 ## Overview
 
 Students accumulate a lot of study material — PDFs, lecture notes, and slides — but traditional self-study usually means reading the same content over and over without a clear sense of what has actually been learned. Creating quizzes, summaries, and study plans by hand also takes significant time.
@@ -351,10 +353,6 @@ docker compose restart frontend
 - Never commit a real `.env` file with credentials.
 - Change all passwords and keys before deploying to production.
 - PostgreSQL is not exposed to the public interface by default.
-
-## Demo
-
-[Watch the Studyback Demo](YOUTUBE_VIDEO_URL)
 
 ## Hackathon
 
