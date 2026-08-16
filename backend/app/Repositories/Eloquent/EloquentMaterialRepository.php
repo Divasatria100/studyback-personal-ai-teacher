@@ -88,4 +88,9 @@ class EloquentMaterialRepository implements MaterialRepositoryInterface
                 'failed_reason' => $failedReason,
             ]);
     }
+
+    public function delete(int $materialId): void
+    {
+        Material::query()->whereKey($materialId)->delete();
+    }
 }

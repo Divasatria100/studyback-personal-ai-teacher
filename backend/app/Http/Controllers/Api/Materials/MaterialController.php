@@ -11,7 +11,9 @@ use App\Services\Materials\MaterialProcessingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -98,5 +100,25 @@ class MaterialController extends Controller
         abort_if($material === null, 404);
 
         return Storage::disk('local')->download($material->file_path, $material->original_filename);
+    }
+
+    public function destroy(Request $request, int $material): Response
+    {
+        $material = $this->materials->findOwnedByUser($request->user()->id, (int) $material);
+
+        abort_if($material === null, 404);
+
+        $filePath = $material->file_path;
+
+        $this->materials->delete($material->id);
+
+        if ($filePath !== null && $filePath !== '' && ! Storage::disk('local')->delete($filePath)) {
+            Log::warning('[MATERIAL DELETE] Stored file could not be removed', [
+                'material_id' => $material->id,
+                'file_path' => $filePath,
+            ]);
+        }
+
+        return response()->noContent();
     }
 }

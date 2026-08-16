@@ -29,7 +29,7 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::apiResource('materials', MaterialController::class)->only(['index', 'show', 'store']);
+    Route::apiResource('materials', MaterialController::class)->only(['index', 'show', 'store', 'destroy']);
 
     Route::get('materials/{material}/download', [MaterialController::class, 'download']);
     Route::get('materials/{material}/topics', [TopicController::class, 'index']);

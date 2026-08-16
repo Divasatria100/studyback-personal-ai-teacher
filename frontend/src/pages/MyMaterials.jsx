@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { materialService } from '../services/api';
-import { Card, Input, Button, Badge, ProgressBar } from '../components/Shared';
-import { Search, Filter, BookOpen, Calendar, HelpCircle, FileText, Upload, ChevronRight, GraduationCap } from 'lucide-react';
+import { Card, Input, Button, Badge, ProgressBar, Modal } from '../components/Shared';
+import { Search, Filter, BookOpen, Calendar, HelpCircle, FileText, Upload, ChevronRight, GraduationCap, Trash2 } from 'lucide-react';
 
 export default function MyMaterials() {
   const navigate = useNavigate();
@@ -25,6 +25,10 @@ export default function MyMaterials() {
   const [uploadingState, setUploadingState] = useState('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadPercent, setUploadPercent] = useState(0);
+
+  // Delete confirmation state
+  const [materialToDelete, setMaterialToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch materials
   const fetchMaterials = async () => {
@@ -74,6 +78,22 @@ export default function MyMaterials() {
     setSearch('');
     setStatusFilter('');
     setSort('recent');
+  };
+
+  const handleDeleteMaterial = async () => {
+    if (!materialToDelete || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await materialService.delete(materialToDelete.id);
+      setMaterials(prev => prev.filter(m => m.id !== materialToDelete.id));
+      addToast('Material deleted successfully', 'success');
+      setMaterialToDelete(null);
+    } catch (err) {
+      addToast(err.message || 'Failed to delete this material. Please try again.', 'error');
+      setMaterialToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -200,12 +220,25 @@ export default function MyMaterials() {
                   </div>
                 </div>
                 
-                <Button variant="ghost" onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/materials/${mat.id}`);
-                }} className="h-8 px-3 font-mono text-[10px] text-slate-700 hover:text-slate-900 uppercase">
-                  View Detail
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMaterialToDelete(mat);
+                    }}
+                    className="h-8 w-8 px-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                    aria-label={`Delete ${mat.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/materials/${mat.id}`);
+                  }} className="h-8 px-3 font-mono text-[10px] text-slate-700 hover:text-slate-900 uppercase">
+                    View Detail
+                  </Button>
+                </div>
               </div>
             </Card>
           ))}
@@ -281,6 +314,36 @@ export default function MyMaterials() {
           </Card>
         </div>
       )}
+      {/* Delete Confirmation Dialog */}
+      <Modal
+        isOpen={materialToDelete !== null}
+        onClose={() => !isDeleting && setMaterialToDelete(null)}
+        title="Delete Material?"
+      >
+        <div className="space-y-6">
+          <p className="text-sm text-slate-650 font-body">
+            This will permanently remove <span className="font-semibold text-slate-900">"{materialToDelete?.title}"</span> and its uploaded file. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 border-t border-white/20 pt-4">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setMaterialToDelete(null)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              type="button"
+              loading={isDeleting}
+              onClick={handleDeleteMaterial}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

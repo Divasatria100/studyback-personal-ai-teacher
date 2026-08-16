@@ -204,6 +204,11 @@ export const materialService = {
     const { data } = await client.get(`/materials/${materialId}/topics`);
     return data; // { material_id, overall_mastery, topics: TopicTreeResource[] }
   },
+
+  delete: async (id) => {
+    await client.delete(`/materials/${id}`);
+    return true; // 204 No Content on success
+  },
 };
 
 // ---------------------------------------------------------------------------

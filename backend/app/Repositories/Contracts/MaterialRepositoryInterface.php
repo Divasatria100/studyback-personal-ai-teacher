@@ -29,4 +29,10 @@ interface MaterialRepositoryInterface
     public function masteryByMaterial(array $materialIds): array;
 
     public function updateProcessingState(int $materialId, string $status, ?string $failedReason = null): void;
+
+    /**
+     * Hard-delete a material row. Related rows (topics, subtopics, chunks,
+     * study sessions, quizzes, etc.) are removed by database CASCADE.
+     */
+    public function delete(int $materialId): void;
 }

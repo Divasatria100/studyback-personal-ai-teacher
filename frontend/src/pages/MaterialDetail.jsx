@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { materialService, studySessionService } from '../services/api';
-import { Card, Button, Badge, ProgressBar } from '../components/Shared';
-import { Download, Play, BookOpen, Calendar, Award, FileText, ChevronRight, Check } from 'lucide-react';
+import { Card, Button, Badge, ProgressBar, Modal } from '../components/Shared';
+import { Download, Play, BookOpen, Calendar, Award, FileText, ChevronRight, Check, Trash2 } from 'lucide-react';
 
 export default function MaterialDetail() {
   const { id } = useParams();
@@ -20,6 +20,10 @@ export default function MaterialDetail() {
   const [selectedMode, setSelectedMode] = useState('guided_study_session');
   const [selectedDifficulty, setSelectedDifficulty] = useState('medium');
   const [isStartingSession, setIsStartingSession] = useState(false);
+
+  // Delete state
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -49,6 +53,21 @@ export default function MaterialDetail() {
       addToast('Download started', 'success');
     } catch (err) {
       addToast('Download failed', 'error');
+    }
+  };
+
+  const handleDeleteMaterial = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await materialService.delete(id);
+      addToast('Material deleted successfully', 'success');
+      navigate('/materials');
+    } catch (err) {
+      addToast(err.message || 'Failed to delete this material. Please try again.', 'error');
+      setIsDeleteOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -145,6 +164,9 @@ export default function MaterialDetail() {
               </Button>
               <Button variant="secondary" onClick={handleDownload} className="flex items-center gap-2">
                 <Download className="h-4 w-4" /> Download PDF
+              </Button>
+              <Button variant="danger" onClick={() => setIsDeleteOpen(true)} className="flex items-center gap-2">
+                <Trash2 className="h-4 w-4" /> Delete
               </Button>
             </div>
           </Card>
@@ -362,6 +384,37 @@ export default function MaterialDetail() {
           </Card>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Modal
+        isOpen={isDeleteOpen}
+        onClose={() => !isDeleting && setIsDeleteOpen(false)}
+        title="Delete Material?"
+      >
+        <div className="space-y-6">
+          <p className="text-sm text-slate-650 font-body">
+            This will permanently remove <span className="font-semibold text-slate-900">"{material.title}"</span> and its uploaded file. This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2 border-t border-white/20 pt-4">
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setIsDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              type="button"
+              loading={isDeleting}
+              onClick={handleDeleteMaterial}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
